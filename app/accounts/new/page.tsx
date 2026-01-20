@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { AppLayout } from "@/components/app-layout";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { createAccount } from "@/lib/account-actions";
 
@@ -42,22 +43,23 @@ export default function NewAccountPage() {
   };
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/accounts">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Add Account</h1>
-          <p className="text-gray-500 text-sm">
-            Add a cash box, bank account, or loan
-          </p>
+    <AppLayout>
+      <div className="max-w-lg mx-auto space-y-6">
+        <div className="flex items-center gap-4">
+          <Link href="/accounts">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Add Account</h1>
+            <p className="text-gray-500 text-sm">
+              Add a cash box, bank account, or loan
+            </p>
+          </div>
         </div>
-      </div>
 
-      <Card>
+        <Card>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -147,9 +149,10 @@ export default function NewAccountPage() {
                 )}
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </AppLayout>
   );
 }

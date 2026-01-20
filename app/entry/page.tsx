@@ -5,6 +5,7 @@ import {
   getPartiesForSelect,
   getCategoriesForSelect,
 } from "@/lib/transaction-actions";
+import { AppLayout } from "@/components/app-layout";
 
 function LoadingSkeleton() {
   return (
@@ -37,15 +38,17 @@ async function QuickEntryContent() {
 
 export default function QuickEntryPage() {
   return (
-    <div className="max-w-md mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Quick Entry</h1>
-        <p className="text-gray-500 text-sm">Log a transaction in seconds</p>
-      </div>
+    <AppLayout>
+      <div className="max-w-md mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Quick Entry</h1>
+          <p className="text-gray-500 text-sm">Log a transaction in seconds</p>
+        </div>
 
-      <Suspense fallback={<LoadingSkeleton />}>
-        <QuickEntryContent />
-      </Suspense>
-    </div>
+        <Suspense fallback={<LoadingSkeleton />}>
+          <QuickEntryContent />
+        </Suspense>
+      </div>
+    </AppLayout>
   );
 }

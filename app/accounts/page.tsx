@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AppLayout } from "@/components/app-layout";
 import { formatINR, toNumber, getAccountTypeColor } from "@/lib/utils";
 import { Wallet, Building2, TrendingUp, TrendingDown, Plus } from "lucide-react";
 
@@ -186,25 +187,27 @@ async function AccountsContent() {
 
 export default function AccountsPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Accounts</h1>
-          <p className="text-gray-500 text-sm">
-            Manage cash, bank accounts, and loans
-          </p>
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Accounts</h1>
+            <p className="text-gray-500 text-sm">
+              Manage cash, bank accounts, and loans
+            </p>
+          </div>
+          <Link href="/accounts/new">
+            <Button variant="warning">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Account
+            </Button>
+          </Link>
         </div>
-        <Link href="/accounts/new">
-          <Button variant="warning">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Account
-          </Button>
-        </Link>
-      </div>
 
-      <Suspense fallback={<LoadingSkeleton />}>
-        <AccountsContent />
-      </Suspense>
-    </div>
+        <Suspense fallback={<LoadingSkeleton />}>
+          <AccountsContent />
+        </Suspense>
+      </div>
+    </AppLayout>
   );
 }

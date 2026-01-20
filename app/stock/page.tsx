@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AppLayout } from "@/components/app-layout";
 import { formatINR, formatIndianNumber, toNumber } from "@/lib/utils";
 import { Package, Plus, Truck } from "lucide-react";
 
@@ -183,25 +184,27 @@ async function StockContent() {
 
 export default function StockPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Stock Inventory</h1>
-          <p className="text-gray-500 text-sm">
-            Track turmeric, maize, and other commodities
-          </p>
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Stock Inventory</h1>
+            <p className="text-gray-500 text-sm">
+              Track turmeric, maize, and other commodities
+            </p>
+          </div>
+          <Link href="/stock/movement">
+            <Button variant="warning">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Movement
+            </Button>
+          </Link>
         </div>
-        <Link href="/stock/movement">
-          <Button variant="warning">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Movement
-          </Button>
-        </Link>
-      </div>
 
-      <Suspense fallback={<LoadingSkeleton />}>
-        <StockContent />
-      </Suspense>
-    </div>
+        <Suspense fallback={<LoadingSkeleton />}>
+          <StockContent />
+        </Suspense>
+      </div>
+    </AppLayout>
   );
 }

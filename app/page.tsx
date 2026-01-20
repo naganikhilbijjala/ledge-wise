@@ -14,11 +14,11 @@ import {
   TrendingUp,
   TrendingDown,
   Package,
-  Users,
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
 import Link from "next/link";
+import { AppLayout } from "@/components/app-layout";
 
 function DashboardSkeleton() {
   return (
@@ -310,8 +310,10 @@ async function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<DashboardSkeleton />}>
-      <DashboardContent />
-    </Suspense>
+    <AppLayout>
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardContent />
+      </Suspense>
+    </AppLayout>
   );
 }

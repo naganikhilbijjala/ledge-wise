@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AppLayout } from "@/components/app-layout";
 import { formatINR, formatDate, toNumber } from "@/lib/utils";
 import { ArrowDownRight, ArrowUpRight, Plus, IndianRupee } from "lucide-react";
 
@@ -108,23 +109,25 @@ async function TransactionsContent() {
 
 export default function TransactionsPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
-          <p className="text-gray-500 text-sm">View all transaction history</p>
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
+            <p className="text-gray-500 text-sm">View all transaction history</p>
+          </div>
+          <Link href="/entry">
+            <Button variant="warning">
+              <Plus className="h-4 w-4 mr-2" />
+              New Transaction
+            </Button>
+          </Link>
         </div>
-        <Link href="/entry">
-          <Button variant="warning">
-            <Plus className="h-4 w-4 mr-2" />
-            New Transaction
-          </Button>
-        </Link>
-      </div>
 
-      <Suspense fallback={<LoadingSkeleton />}>
-        <TransactionsContent />
-      </Suspense>
-    </div>
+        <Suspense fallback={<LoadingSkeleton />}>
+          <TransactionsContent />
+        </Suspense>
+      </div>
+    </AppLayout>
   );
 }

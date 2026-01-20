@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AppLayout } from "@/components/app-layout";
 import {
   formatINR,
   formatDate,
@@ -231,22 +232,24 @@ export default async function PartyLedgerPage({ params }: Props) {
   const { id } = await params;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/parties">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Party Ledger</h1>
-          <p className="text-gray-500 text-sm">View transaction history</p>
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link href="/parties">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Party Ledger</h1>
+            <p className="text-gray-500 text-sm">View transaction history</p>
+          </div>
         </div>
-      </div>
 
-      <Suspense fallback={<LoadingSkeleton />}>
-        <PartyLedgerContent id={id} />
-      </Suspense>
-    </div>
+        <Suspense fallback={<LoadingSkeleton />}>
+          <PartyLedgerContent id={id} />
+        </Suspense>
+      </div>
+    </AppLayout>
   );
 }

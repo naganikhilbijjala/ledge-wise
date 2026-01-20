@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AppLayout } from "@/components/app-layout";
 import {
   formatINR,
   formatDate,
@@ -251,24 +252,26 @@ export default async function TallyExportPage({ searchParams }: Props) {
   const resolvedSearchParams = await searchParams;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <FileText className="h-6 w-6 text-blue-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Tally Export</h1>
-            <p className="text-gray-500 text-sm">
-              Filter and export official transactions for Tally
-            </p>
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <FileText className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Tally Export</h1>
+              <p className="text-gray-500 text-sm">
+                Filter and export official transactions for Tally
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <Suspense fallback={<LoadingSkeleton />}>
-        <TallyContent searchParams={resolvedSearchParams} />
-      </Suspense>
-    </div>
+        <Suspense fallback={<LoadingSkeleton />}>
+          <TallyContent searchParams={resolvedSearchParams} />
+        </Suspense>
+      </div>
+    </AppLayout>
   );
 }
