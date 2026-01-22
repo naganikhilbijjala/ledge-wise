@@ -18,10 +18,18 @@ import {
   LogOut,
   User,
   BookOpen,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 
-const navItems = [
+interface NavItem {
+  title: string;
+  href: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  isNew?: boolean;
+}
+
+const navItems: NavItem[] = [
   {
     title: "Dashboard",
     href: "/",
@@ -66,6 +74,12 @@ const navItems = [
     title: "Settings",
     href: "/settings",
     icon: Settings,
+  },
+  {
+    title: "What's New",
+    href: "/changelog",
+    icon: Sparkles,
+    isNew: true,
   },
 ];
 
@@ -138,6 +152,11 @@ export function Sidebar() {
                   )}
                 />
                 {item.title}
+                {item.isNew && (
+                  <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 text-purple-700 rounded">
+                    NEW
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -126,7 +126,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-gray-600">Version</span>
-                <span className="font-medium text-gray-400">v0.1.0</span>
+                <span className="font-medium text-gray-400">v0.2.0</span>
               </div>
             </div>
           </CardContent>
