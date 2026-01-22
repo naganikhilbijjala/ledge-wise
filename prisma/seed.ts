@@ -40,11 +40,14 @@ async function main() {
   ];
 
   for (const cat of categories) {
-    await prisma.category.upsert({
+    const existing = await prisma.category.findFirst({
       where: { name: cat.name },
-      update: {},
-      create: { ...cat, isDefault: true },
     });
+    if (!existing) {
+      await prisma.category.create({
+        data: { ...cat, isDefault: true },
+      });
+    }
   }
 
   // Create default accounts

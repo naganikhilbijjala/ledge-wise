@@ -35,7 +35,7 @@ export function PartyForm({ editParty }: Props) {
 
   const [formData, setFormData] = useState({
     name: editParty?.name || "",
-    type: editParty?.type || "CUSTOMER",
+    type: (editParty?.type || "CUSTOMER") as PartyType,
     phone: editParty?.phone || "",
     address: editParty?.address || "",
     notes: editParty?.notes || "",
@@ -123,7 +123,7 @@ export function PartyForm({ editParty }: Props) {
               id="type"
               value={formData.type}
               onChange={(e) =>
-                setFormData((p) => ({ ...p, type: e.target.value }))
+                setFormData((p) => ({ ...p, type: e.target.value as PartyType }))
               }
               required
             >

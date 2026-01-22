@@ -33,7 +33,7 @@ export function AccountForm({ editAccount }: Props) {
 
   const [formData, setFormData] = useState({
     name: editAccount?.name || "",
-    type: editAccount?.type || "CASH",
+    type: (editAccount?.type || "CASH") as AccountType,
     description: editAccount?.description || "",
     currentBalance: editAccount?.currentBalance?.toString() || "",
   });
@@ -119,7 +119,7 @@ export function AccountForm({ editAccount }: Props) {
               id="type"
               value={formData.type}
               onChange={(e) =>
-                setFormData((p) => ({ ...p, type: e.target.value }))
+                setFormData((p) => ({ ...p, type: e.target.value as AccountType }))
               }
               required
             >
