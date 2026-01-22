@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/app-layout";
-import { formatINR, toNumber, getAccountTypeColor } from "@/lib/utils";
+import { formatINR, toNumber, getAccountTypeColor, getAccountTypeLabel } from "@/lib/utils";
 import { Wallet, Building2, TrendingUp, TrendingDown, Plus, Pencil } from "lucide-react";
 
 function LoadingSkeleton() {
@@ -110,7 +110,7 @@ async function AccountsContent() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-amber-600" />
-              <span className="text-sm text-amber-700">Loans Given</span>
+              <span className="text-sm text-amber-700">Debtors</span>
             </div>
             <p className="text-xl font-bold text-amber-800 mt-1">
               {formatINR(totals.loansGiven)}
@@ -121,7 +121,7 @@ async function AccountsContent() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <TrendingDown className="h-5 w-5 text-red-600" />
-              <span className="text-sm text-red-700">Loans Taken</span>
+              <span className="text-sm text-red-700">Creditors</span>
             </div>
             <p className="text-xl font-bold text-red-800 mt-1">
               {formatINR(totals.loansTaken)}
@@ -150,7 +150,7 @@ async function AccountsContent() {
                         className={getAccountTypeColor(account.type)}
                         variant="secondary"
                       >
-                        {account.type.replace("_", " ")}
+                        {getAccountTypeLabel(account.type)}
                       </Badge>
                     </div>
                   </div>

@@ -72,6 +72,22 @@ export function getAccountTypeColor(type: string): string {
   }
 }
 
+// Get account type display label (using business terminology)
+export function getAccountTypeLabel(type: string): string {
+  switch (type) {
+    case "CASH":
+      return "Cash";
+    case "BANK":
+      return "Bank";
+    case "LOAN_GIVEN":
+      return "Debtors"; // People who owe us money
+    case "LOAN_TAKEN":
+      return "Creditors"; // People we owe money to
+    default:
+      return type;
+  }
+}
+
 // Get party type display name
 export function getPartyTypeLabel(type: string): string {
   switch (type) {

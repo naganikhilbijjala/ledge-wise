@@ -126,10 +126,10 @@ export function AccountForm({ editAccount }: Props) {
               <option value="CASH">Cash - Physical cash in hand</option>
               <option value="BANK">Bank - Bank account balance</option>
               <option value="LOAN_GIVEN">
-                Loan Given - Money lent to others
+                Debtors - People who owe you money
               </option>
               <option value="LOAN_TAKEN">
-                Loan Taken - Money borrowed from others
+                Creditors - People you owe money to
               </option>
             </Select>
           </div>

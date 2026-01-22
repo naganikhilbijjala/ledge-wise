@@ -5,6 +5,7 @@ import {
   getPartiesForSelect,
   getCategoriesForSelect,
 } from "@/lib/transaction-actions";
+import { getStocksForSelect } from "@/lib/stock-actions";
 import { AppLayout } from "@/components/app-layout";
 
 function LoadingSkeleton() {
@@ -21,10 +22,11 @@ function LoadingSkeleton() {
 }
 
 async function QuickEntryContent() {
-  const [accounts, parties, categories] = await Promise.all([
+  const [accounts, parties, categories, stocks] = await Promise.all([
     getAccountsForSelect(),
     getPartiesForSelect(),
     getCategoriesForSelect(),
+    getStocksForSelect(),
   ]);
 
   return (
@@ -32,6 +34,7 @@ async function QuickEntryContent() {
       accounts={accounts}
       parties={parties}
       categories={categories}
+      stocks={stocks}
     />
   );
 }

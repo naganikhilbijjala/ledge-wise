@@ -14,6 +14,30 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.3.0",
+    date: "2025-01-21",
+    title: "Stock Purchase Integration",
+    description: "Stock purchases now integrated with transactions for automatic inventory updates.",
+    changes: [
+      {
+        type: "feature",
+        text: "Stock purchase option in Quick Entry - select stock, quantity (KG/Quintals), and price",
+      },
+      {
+        type: "feature",
+        text: "Automatic inventory update when recording stock purchases",
+      },
+      {
+        type: "feature",
+        text: "5% tax calculation for purchases from traders (non-farmers)",
+      },
+      {
+        type: "improvement",
+        text: "Weighted average cost automatically calculated on purchases",
+      },
+    ],
+  },
+  {
     version: "0.2.0",
     date: "2025-01-21",
     title: "Day Book & Changelog",

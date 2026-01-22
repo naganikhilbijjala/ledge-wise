@@ -9,9 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { createTransaction, updateTransaction } from "@/lib/transaction-actions";
 import { createParty } from "@/lib/party-actions";
-import { ArrowDownLeft, ArrowUpRight, Check, Loader2, Plus, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Check, Loader2, Plus, X, Package } from "lucide-react";
 import type { LedgerType, TransactionType, PartyType } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, formatINR } from "@/lib/utils";
 
 interface Account {
   id: string;
@@ -30,6 +30,12 @@ interface Category {
   name: string;
 }
 
+interface Stock {
+  id: string;
+  name: string;
+  commodityType: string;
+}
+
 interface TransactionData {
   id: string;
   accountId: string;
@@ -45,10 +51,11 @@ interface Props {
   accounts: Account[];
   parties: Party[];
   categories: Category[];
+  stocks?: Stock[];
   editTransaction?: TransactionData;
 }
 
-export function QuickEntryForm({ accounts, parties: initialParties, categories, editTransaction }: Props) {
+export function QuickEntryForm({ accounts, parties: initialParties, categories, stocks = [], editTransaction }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [success, setSuccess] = useState(false);
@@ -64,6 +71,16 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
     phone: "",
   });
 
+  // Stock purchase state
+  const [isStockPurchase, setIsStockPurchase] = useState(false);
+  const [stockData, setStockData] = useState({
+    stockId: "",
+    quantity: "",
+    quantityUnit: "QUINTAL" as "KG" | "QUINTAL",
+    pricePerUnit: "",
+    includeTax: false,
+  });
+
   const [formData, setFormData] = useState({
     accountId: editTransaction?.accountId || accounts[0]?.id || "",
     amount: editTransaction?.amount?.toString() || "",
@@ -73,6 +90,41 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
     category: editTransaction?.category || "",
     ledgerType: (editTransaction?.ledgerType || "PARALLEL") as "OFFICIAL" | "PARALLEL",
   });
+
+  // Get selected party type
+  const selectedParty = parties.find(p => p.id === formData.partyId);
+  const isTraderPurchase = selectedParty && selectedParty.type !== "CUSTOMER";
+
+  // Calculate amount from stock data
+  const calculateStockAmount = () => {
+    const qty = parseFloat(stockData.quantity) || 0;
+    const price = parseFloat(stockData.pricePerUnit) || 0;
+    return qty * price;
+  };
+
+  // Calculate tax amount (5% for trader purchases)
+  const calculateTaxAmount = () => {
+    if (!isTraderPurchase || !stockData.includeTax) return 0;
+    return calculateStockAmount() * 0.05;
+  };
+
+  // Total amount including tax
+  const totalAmount = calculateStockAmount() + calculateTaxAmount();
+
+  // Auto-update amount when stock data changes
+  const handleStockDataChange = (updates: Partial<typeof stockData>) => {
+    const newStockData = { ...stockData, ...updates };
+    setStockData(newStockData);
+
+    // Calculate and update amount
+    const qty = parseFloat(newStockData.quantity) || 0;
+    const price = parseFloat(newStockData.pricePerUnit) || 0;
+    const baseAmount = qty * price;
+
+    if (baseAmount > 0) {
+      setFormData(prev => ({ ...prev, amount: baseAmount.toString() }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,6 +160,12 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             description: formData.description || undefined,
             category: formData.category || undefined,
             ledgerType: formData.ledgerType,
+            // Stock purchase fields
+            stockId: isStockPurchase && stockData.stockId ? stockData.stockId : undefined,
+            quantity: isStockPurchase && stockData.quantity ? parseFloat(stockData.quantity) : undefined,
+            quantityUnit: isStockPurchase ? stockData.quantityUnit : undefined,
+            pricePerUnit: isStockPurchase && stockData.pricePerUnit ? parseFloat(stockData.pricePerUnit) : undefined,
+            includeTax: isStockPurchase ? stockData.includeTax : undefined,
           });
 
           setSuccess(true);
@@ -118,6 +176,15 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
               amount: "",
               description: "",
             }));
+            // Reset stock data too
+            setIsStockPurchase(false);
+            setStockData({
+              stockId: "",
+              quantity: "",
+              quantityUnit: "QUINTAL",
+              pricePerUnit: "",
+              includeTax: false,
+            });
           }, 1500);
         }
       } catch (error) {
@@ -239,6 +306,141 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
               autoFocus
             />
           </div>
+
+          {/* Stock Purchase Toggle - Only show for Money Out and if stocks exist */}
+          {formData.type === "OUT" && stocks.length > 0 && !isEditMode && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isStockPurchase"
+                  checked={isStockPurchase}
+                  onChange={(e) => {
+                    setIsStockPurchase(e.target.checked);
+                    if (!e.target.checked) {
+                      setStockData({
+                        stockId: "",
+                        quantity: "",
+                        quantityUnit: "QUINTAL",
+                        pricePerUnit: "",
+                        includeTax: false,
+                      });
+                    }
+                  }}
+                  className="h-4 w-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+                />
+                <Label htmlFor="isStockPurchase" className="flex items-center gap-2 cursor-pointer">
+                  <Package size={16} className="text-amber-600" />
+                  This is a stock purchase
+                </Label>
+              </div>
+
+              {isStockPurchase && (
+                <div className="space-y-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  {/* Stock Selection */}
+                  <div className="space-y-1">
+                    <Label htmlFor="stock" className="text-sm">Select Stock *</Label>
+                    <Select
+                      id="stock"
+                      value={stockData.stockId}
+                      onChange={(e) => handleStockDataChange({ stockId: e.target.value })}
+                      required={isStockPurchase}
+                    >
+                      <option value="">Select stock item</option>
+                      {stocks.map((stock) => (
+                        <option key={stock.id} value={stock.id}>
+                          {stock.name} ({stock.commodityType.replace("_", " ")})
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  {/* Quantity and Unit */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="quantity" className="text-sm">Quantity *</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        placeholder="0"
+                        value={stockData.quantity}
+                        onChange={(e) => handleStockDataChange({ quantity: e.target.value })}
+                        min="0"
+                        step="0.01"
+                        required={isStockPurchase}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="quantityUnit" className="text-sm">Unit</Label>
+                      <Select
+                        id="quantityUnit"
+                        value={stockData.quantityUnit}
+                        onChange={(e) => handleStockDataChange({ quantityUnit: e.target.value as "KG" | "QUINTAL" })}
+                      >
+                        <option value="QUINTAL">Quintals</option>
+                        <option value="KG">KG</option>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Price per Unit */}
+                  <div className="space-y-1">
+                    <Label htmlFor="pricePerUnit" className="text-sm">
+                      Price per {stockData.quantityUnit === "QUINTAL" ? "Quintal" : "KG"} (₹) *
+                    </Label>
+                    <Input
+                      id="pricePerUnit"
+                      type="number"
+                      placeholder="0"
+                      value={stockData.pricePerUnit}
+                      onChange={(e) => handleStockDataChange({ pricePerUnit: e.target.value })}
+                      min="0"
+                      step="0.01"
+                      required={isStockPurchase}
+                    />
+                  </div>
+
+                  {/* Tax checkbox - only show for non-farmer (trader) purchases */}
+                  {isTraderPurchase && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-amber-200">
+                      <input
+                        type="checkbox"
+                        id="includeTax"
+                        checked={stockData.includeTax}
+                        onChange={(e) => handleStockDataChange({ includeTax: e.target.checked })}
+                        className="h-4 w-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+                      />
+                      <Label htmlFor="includeTax" className="text-sm cursor-pointer">
+                        Include 5% tax (buying from trader)
+                      </Label>
+                    </div>
+                  )}
+
+                  {/* Amount Summary */}
+                  {calculateStockAmount() > 0 && (
+                    <div className="pt-2 border-t border-amber-200 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Base Amount:</span>
+                        <span className="font-medium">{formatINR(calculateStockAmount())}</span>
+                      </div>
+                      {stockData.includeTax && calculateTaxAmount() > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Tax (5%):</span>
+                          <span className="font-medium text-amber-600">{formatINR(calculateTaxAmount())}</span>
+                        </div>
+                      )}
+                      {stockData.includeTax && calculateTaxAmount() > 0 && (
+                        <div className="flex justify-between text-sm font-bold">
+                          <span>Total:</span>
+                          <span className="text-red-600">{formatINR(totalAmount)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Party Selection */}
           <div className="space-y-2">
