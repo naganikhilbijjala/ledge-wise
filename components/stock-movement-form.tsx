@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 interface Stock {
   id: string;
   name: string;
-  commodityType: string;
 }
 
 interface Party {
@@ -37,6 +36,7 @@ export function StockMovementForm({ stocks, parties }: Props) {
   const [formData, setFormData] = useState({
     stockId: stocks[0]?.id || "",
     type: "PURCHASE",
+    adjustmentDirection: "ADD" as "ADD" | "REMOVE", // For adjustment type
     quantity: "",
     pricePerKg: "",
     partyId: "",
@@ -49,18 +49,26 @@ export function StockMovementForm({ stocks, parties }: Props) {
     e.preventDefault();
     setError(null);
 
-    if (!formData.stockId || !formData.quantity || !formData.pricePerKg) {
+    // Price is optional for adjustments
+    const priceRequired = formData.type !== "ADJUSTMENT";
+    if (!formData.stockId || !formData.quantity || (priceRequired && !formData.pricePerKg)) {
       setError("Please fill in all required fields");
       return;
     }
 
     startTransition(async () => {
       try {
+        // For adjustment, handle direction (negative quantity for removal)
+        let quantity = parseFloat(formData.quantity);
+        if (formData.type === "ADJUSTMENT" && formData.adjustmentDirection === "REMOVE") {
+          quantity = -quantity;
+        }
+
         await createStockMovement({
           stockId: formData.stockId,
           type: formData.type,
-          quantity: parseFloat(formData.quantity),
-          pricePerKg: parseFloat(formData.pricePerKg),
+          quantity,
+          pricePerKg: parseFloat(formData.pricePerKg) || 0,
           partyId: formData.partyId || undefined,
           description: formData.description || undefined,
           vehicleNumber: formData.vehicleNumber || undefined,
@@ -141,7 +149,52 @@ export function StockMovementForm({ stocks, parties }: Props) {
                 Adjustment
               </button>
             </div>
+            {/* Help text for movement type */}
+            <p className="text-xs text-gray-500">
+              {formData.type === "PURCHASE" && "Stock coming in from supplier/farmer"}
+              {formData.type === "SALE" && "Stock going out to customer"}
+              {formData.type === "PROCESSING" && "Stock used for processing (e.g., raw to powder)"}
+              {formData.type === "ADJUSTMENT" && "Correct inventory for physical count, damage, or errors"}
+            </p>
           </div>
+
+          {/* Adjustment Direction - only show for ADJUSTMENT type */}
+          {formData.type === "ADJUSTMENT" && (
+            <div className="space-y-2">
+              <Label>Adjustment Direction *</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData((p) => ({ ...p, adjustmentDirection: "ADD" }))}
+                  className={cn(
+                    "py-2 rounded-lg text-sm font-medium transition-colors",
+                    formData.adjustmentDirection === "ADD"
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
+                >
+                  + Add Stock
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData((p) => ({ ...p, adjustmentDirection: "REMOVE" }))}
+                  className={cn(
+                    "py-2 rounded-lg text-sm font-medium transition-colors",
+                    formData.adjustmentDirection === "REMOVE"
+                      ? "bg-red-500 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
+                >
+                  - Remove Stock
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                {formData.adjustmentDirection === "ADD"
+                  ? "Found extra stock during physical count"
+                  : "Stock lost due to damage, theft, or count correction"}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="stock">Stock Item *</Label>
@@ -156,7 +209,7 @@ export function StockMovementForm({ stocks, parties }: Props) {
               <option value="">Select stock</option>
               {stocks.map((stock) => (
                 <option key={stock.id} value={stock.id}>
-                  {stock.name} ({stock.commodityType.replace("_", " ")})
+                  {stock.name}
                 </option>
               ))}
             </Select>
@@ -180,7 +233,9 @@ export function StockMovementForm({ stocks, parties }: Props) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="pricePerKg">Price per KG (₹) *</Label>
+              <Label htmlFor="pricePerKg">
+                Price per KG (₹) {formData.type !== "ADJUSTMENT" ? "*" : "(Optional)"}
+              </Label>
               <Input
                 id="pricePerKg"
                 type="number"
@@ -191,7 +246,7 @@ export function StockMovementForm({ stocks, parties }: Props) {
                 }
                 min="0"
                 step="0.01"
-                required
+                required={formData.type !== "ADJUSTMENT"}
               />
             </div>
           </div>
@@ -272,7 +327,7 @@ export function StockMovementForm({ stocks, parties }: Props) {
               type="submit"
               variant="warning"
               className="flex-1"
-              disabled={isPending || !formData.stockId || !formData.quantity || !formData.pricePerKg}
+              disabled={isPending || !formData.stockId || !formData.quantity || (formData.type !== "ADJUSTMENT" && !formData.pricePerKg)}
             >
               {isPending ? (
                 <>

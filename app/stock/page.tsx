@@ -2,8 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/app-layout";
 import { formatINR, formatIndianNumber, toNumber } from "@/lib/utils";
@@ -24,22 +23,8 @@ async function StockContent() {
 
   const stocks = await prisma.stock.findMany({
     where: { userId, isDeleted: false },
-    orderBy: [{ commodityType: "asc" }, { name: "asc" }],
+    orderBy: { name: "asc" },
   });
-
-  const commodityColors: Record<string, string> = {
-    TURMERIC_RAW: "bg-amber-100 text-amber-800",
-    TURMERIC_POWDER: "bg-yellow-100 text-yellow-800",
-    MAIZE: "bg-green-100 text-green-800",
-    OTHER: "bg-gray-100 text-gray-800",
-  };
-
-  const commodityLabels: Record<string, string> = {
-    TURMERIC_RAW: "Raw Turmeric",
-    TURMERIC_POWDER: "Turmeric Powder",
-    MAIZE: "Maize",
-    OTHER: "Other",
-  };
 
   // Calculate totals
   const totals = stocks.reduce(
@@ -47,44 +32,25 @@ async function StockContent() {
       const qty = toNumber(stock.quantity);
       const cost = toNumber(stock.avgCostPerKg);
       const value = qty * cost;
-
-      if (stock.commodityType.startsWith("TURMERIC")) {
-        acc.turmericQty += qty;
-        acc.turmericValue += value;
-      } else if (stock.commodityType === "MAIZE") {
-        acc.maizeQty += qty;
-        acc.maizeValue += value;
-      } else {
-        acc.otherValue += value;
-      }
+      acc.totalQty += qty;
       acc.totalValue += value;
       return acc;
     },
-    {
-      turmericQty: 0,
-      turmericValue: 0,
-      maizeQty: 0,
-      maizeValue: 0,
-      otherValue: 0,
-      totalValue: 0,
-    }
+    { totalQty: 0, totalValue: 0 }
   );
 
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-amber-50 border-amber-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-amber-600" />
-              <span className="text-sm text-amber-700">Turmeric Stock</span>
+              <span className="text-sm text-amber-700">Total Items</span>
             </div>
             <p className="text-xl font-bold text-amber-800 mt-1">
-              {formatIndianNumber(totals.turmericQty)} KG
-            </p>
-            <p className="text-sm text-amber-600">
-              {formatINR(totals.turmericValue)}
+              {stocks.length}
             </p>
           </CardContent>
         </Card>
@@ -92,17 +58,14 @@ async function StockContent() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-green-600" />
-              <span className="text-sm text-green-700">Maize Stock</span>
+              <span className="text-sm text-green-700">Total Quantity</span>
             </div>
             <p className="text-xl font-bold text-green-800 mt-1">
-              {formatIndianNumber(totals.maizeQty)} KG
-            </p>
-            <p className="text-sm text-green-600">
-              {formatINR(totals.maizeValue)}
+              {formatIndianNumber(totals.totalQty)} KG
             </p>
           </CardContent>
         </Card>
-        <Card className="col-span-2 bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0">
+        <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-amber-100" />
@@ -125,30 +88,19 @@ async function StockContent() {
           return (
             <Card key={stock.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <Badge
-                    className={commodityColors[stock.commodityType]}
-                    variant="secondary"
-                  >
-                    {commodityLabels[stock.commodityType]}
-                  </Badge>
-                  <div className="flex items-center gap-2">
-                    {stock.location && (
-                      <span className="text-xs text-gray-500">
-                        {stock.location}
-                      </span>
-                    )}
-                    <Link href={`/stock/${stock.id}/edit`}>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                        <Pencil className="h-3 w-3 text-gray-500" />
-                      </Button>
-                    </Link>
-                  </div>
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="font-semibold text-gray-900 text-lg">
+                    {stock.name}
+                  </h3>
+                  <Link href={`/stock/${stock.id}/edit`}>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                      <Pencil className="h-3 w-3 text-gray-500" />
+                    </Button>
+                  </Link>
                 </div>
-
-                <h3 className="font-semibold text-gray-900 text-lg">
-                  {stock.name}
-                </h3>
+                {stock.location && (
+                  <p className="text-xs text-gray-500 mb-3">{stock.location}</p>
+                )}
 
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div>
@@ -201,15 +153,23 @@ export default function StockPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Stock Inventory</h1>
             <p className="text-gray-500 text-sm">
-              Track turmeric, maize, and other commodities
+              Track your commodities inventory
             </p>
           </div>
-          <Link href="/stock/movement">
-            <Button variant="warning">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Movement
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/stock/new">
+              <Button variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Stock
+              </Button>
+            </Link>
+            <Link href="/stock/movement">
+              <Button variant="warning">
+                <Truck className="h-4 w-4 mr-2" />
+                Add Movement
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <Suspense fallback={<LoadingSkeleton />}>

@@ -34,7 +34,6 @@ export function StockForm({ editStock }: Props) {
 
   const [formData, setFormData] = useState({
     name: editStock?.name || "",
-    commodityType: editStock?.commodityType || "TURMERIC_RAW",
     quantity: editStock?.quantity?.toString() || "0",
     unit: editStock?.unit || "KG",
     avgCostPerKg: editStock?.avgCostPerKg?.toString() || "0",
@@ -51,14 +50,12 @@ export function StockForm({ editStock }: Props) {
           await updateStock({
             id: editStock.id,
             name: formData.name,
-            commodityType: formData.commodityType,
             unit: formData.unit,
             location: formData.location || undefined,
           });
         } else {
           await createStock({
             name: formData.name,
-            commodityType: formData.commodityType,
             quantity: parseFloat(formData.quantity) || 0,
             unit: formData.unit,
             avgCostPerKg: parseFloat(formData.avgCostPerKg) || 0,
@@ -107,7 +104,7 @@ export function StockForm({ editStock }: Props) {
             <Label htmlFor="name">Stock Name *</Label>
             <Input
               id="name"
-              placeholder="e.g., Turmeric Finger Grade A"
+              placeholder="e.g., Turmeric Finger, Turmeric Powder, Maize"
               value={formData.name}
               onChange={(e) =>
                 setFormData((p) => ({ ...p, name: e.target.value }))
@@ -115,23 +112,9 @@ export function StockForm({ editStock }: Props) {
               required
               autoFocus
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="commodityType">Commodity Type *</Label>
-            <Select
-              id="commodityType"
-              value={formData.commodityType}
-              onChange={(e) =>
-                setFormData((p) => ({ ...p, commodityType: e.target.value }))
-              }
-              required
-            >
-              <option value="TURMERIC_RAW">Turmeric (Raw)</option>
-              <option value="TURMERIC_POWDER">Turmeric (Powder)</option>
-              <option value="MAIZE">Maize</option>
-              <option value="OTHER">Other</option>
-            </Select>
+            <p className="text-xs text-gray-500">
+              Each stock item is tracked separately (e.g., Turmeric Finger and Turmeric Powder are different items)
+            </p>
           </div>
 
           {!isEditMode && (

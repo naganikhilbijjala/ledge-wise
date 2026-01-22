@@ -33,7 +33,6 @@ interface Category {
 interface Stock {
   id: string;
   name: string;
-  commodityType: string;
 }
 
 interface TransactionData {
@@ -111,7 +110,7 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
   // Total amount including tax
   const totalAmount = calculateStockAmount() + calculateTaxAmount();
 
-  // Auto-update amount when stock data changes
+  // Auto-update amount and description when stock data changes
   const handleStockDataChange = (updates: Partial<typeof stockData>) => {
     const newStockData = { ...stockData, ...updates };
     setStockData(newStockData);
@@ -122,7 +121,17 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
     const baseAmount = qty * price;
 
     if (baseAmount > 0) {
-      setFormData(prev => ({ ...prev, amount: baseAmount.toString() }));
+      // Build stock description
+      const stockName = stocks.find(s => s.id === newStockData.stockId)?.name || "";
+      const stockDesc = stockName && qty > 0 && price > 0
+        ? `Stock: ${qty} ${newStockData.quantityUnit} @ ₹${price}/${newStockData.quantityUnit}`
+        : "";
+
+      setFormData(prev => ({
+        ...prev,
+        amount: baseAmount.toString(),
+        description: stockDesc,
+      }));
     }
   };
 
@@ -308,7 +317,7 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
           </div>
 
           {/* Stock Purchase Toggle - Only show for Money Out and if stocks exist */}
-          {formData.type === "OUT" && stocks.length > 0 && !isEditMode && (
+          {formData.type === "OUT" && stocks.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <input
@@ -349,7 +358,7 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
                       <option value="">Select stock item</option>
                       {stocks.map((stock) => (
                         <option key={stock.id} value={stock.id}>
-                          {stock.name} ({stock.commodityType.replace("_", " ")})
+                          {stock.name}
                         </option>
                       ))}
                     </Select>

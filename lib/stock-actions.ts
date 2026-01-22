@@ -8,7 +8,6 @@ type CommodityType = "TURMERIC_RAW" | "TURMERIC_POWDER" | "MAIZE" | "OTHER";
 
 interface CreateStockInput {
   name: string;
-  commodityType: string;
   quantity?: number;
   unit?: string;
   avgCostPerKg?: number;
@@ -21,7 +20,7 @@ export async function createStock(input: CreateStockInput) {
   const stock = await prisma.stock.create({
     data: {
       name: input.name,
-      commodityType: input.commodityType as CommodityType,
+      commodityType: "OTHER" as CommodityType, // Default, not used for display
       quantity: input.quantity || 0,
       unit: input.unit || "KG",
       avgCostPerKg: input.avgCostPerKg || 0,
@@ -65,7 +64,6 @@ export async function getStockById(id: string) {
 interface UpdateStockInput {
   id: string;
   name: string;
-  commodityType: string;
   unit?: string;
   location?: string;
 }
@@ -86,7 +84,6 @@ export async function updateStock(input: UpdateStockInput) {
     where: { id: input.id },
     data: {
       name: input.name,
-      commodityType: input.commodityType as CommodityType,
       unit: input.unit || "KG",
       location: input.location || null,
     },
@@ -162,7 +159,6 @@ export async function getStocksForSelect() {
     select: {
       id: true,
       name: true,
-      commodityType: true,
     },
   });
 

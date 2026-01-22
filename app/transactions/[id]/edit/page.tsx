@@ -8,6 +8,7 @@ import {
   getCategoriesForSelect,
   getTransactionById,
 } from "@/lib/transaction-actions";
+import { getStocksForSelect } from "@/lib/stock-actions";
 import { AppLayout } from "@/components/app-layout";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -26,10 +27,11 @@ function LoadingSkeleton() {
 }
 
 async function EditTransactionContent({ id }: { id: string }) {
-  const [accounts, parties, categories, transaction] = await Promise.all([
+  const [accounts, parties, categories, stocks, transaction] = await Promise.all([
     getAccountsForSelect(),
     getPartiesForSelect(),
     getCategoriesForSelect(),
+    getStocksForSelect(),
     getTransactionById(id),
   ]);
 
@@ -42,6 +44,7 @@ async function EditTransactionContent({ id }: { id: string }) {
       accounts={accounts}
       parties={parties}
       categories={categories}
+      stocks={stocks}
       editTransaction={transaction}
     />
   );
