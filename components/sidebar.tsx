@@ -17,6 +17,7 @@ import {
   IndianRupee,
   LogOut,
   User,
+  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -45,6 +46,11 @@ const navItems = [
     title: "Transactions",
     href: "/transactions",
     icon: IndianRupee,
+  },
+  {
+    title: "Day Book",
+    href: "/daybook",
+    icon: BookOpen,
   },
   {
     title: "Stock",
