@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   ArrowUpRight,
   Phone,
   MapPin,
+  Pencil,
 } from "lucide-react";
 
 interface Props {
@@ -34,10 +36,13 @@ function LoadingSkeleton() {
 }
 
 async function PartyLedgerContent({ id }: { id: string }) {
-  const party = await prisma.party.findUnique({
-    where: { id },
+  const userId = await requireAuth();
+
+  const party = await prisma.party.findFirst({
+    where: { id, userId, isDeleted: false },
     include: {
       transactions: {
+        where: { isDeleted: false },
         orderBy: { date: "desc" },
         include: {
           account: {
@@ -234,16 +239,24 @@ export default async function PartyLedgerPage({ params }: Props) {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href="/parties">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/parties">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Party Ledger</h1>
+              <p className="text-gray-500 text-sm">View transaction history</p>
+            </div>
+          </div>
+          <Link href={`/parties/${id}/edit`}>
+            <Button variant="outline" size="sm">
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit Party
             </Button>
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Party Ledger</h1>
-            <p className="text-gray-500 text-sm">View transaction history</p>
-          </div>
         </div>
 
         <Suspense fallback={<LoadingSkeleton />}>

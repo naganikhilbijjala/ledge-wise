@@ -1,12 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/app-layout";
 import { formatINR, formatIndianNumber, toNumber } from "@/lib/utils";
-import { Package, Plus, Truck } from "lucide-react";
+import { Package, Plus, Truck, Pencil } from "lucide-react";
 
 function LoadingSkeleton() {
   return (
@@ -19,7 +20,10 @@ function LoadingSkeleton() {
 }
 
 async function StockContent() {
+  const userId = await requireAuth();
+
   const stocks = await prisma.stock.findMany({
+    where: { userId, isDeleted: false },
     orderBy: [{ commodityType: "asc" }, { name: "asc" }],
   });
 
@@ -128,11 +132,18 @@ async function StockContent() {
                   >
                     {commodityLabels[stock.commodityType]}
                   </Badge>
-                  {stock.location && (
-                    <span className="text-xs text-gray-500">
-                      {stock.location}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {stock.location && (
+                      <span className="text-xs text-gray-500">
+                        {stock.location}
+                      </span>
+                    )}
+                    <Link href={`/stock/${stock.id}/edit`}>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <Pencil className="h-3 w-3 text-gray-500" />
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
 
                 <h3 className="font-semibold text-gray-900 text-lg">

@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { toNumber } from "@/lib/utils";
+import { requireAuth } from "@/lib/auth-utils";
 import type {
   NetPosition,
   AccountSummary,
@@ -12,8 +13,10 @@ import type {
 
 // Get net position summary for dashboard
 export async function getNetPosition(): Promise<NetPosition> {
+  const userId = await requireAuth();
+
   const accounts = await prisma.account.findMany({
-    where: { isActive: true },
+    where: { userId, isActive: true, isDeleted: false },
     select: {
       type: true,
       currentBalance: true,
@@ -57,8 +60,10 @@ export async function getNetPosition(): Promise<NetPosition> {
 
 // Get all accounts with balances
 export async function getAccounts(): Promise<AccountSummary[]> {
+  const userId = await requireAuth();
+
   const accounts = await prisma.account.findMany({
-    where: { isActive: true },
+    where: { userId, isActive: true, isDeleted: false },
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -78,8 +83,10 @@ export async function getAccounts(): Promise<AccountSummary[]> {
 
 // Get parties with dues
 export async function getParties(): Promise<PartySummary[]> {
+  const userId = await requireAuth();
+
   const parties = await prisma.party.findMany({
-    where: { isActive: true },
+    where: { userId, isActive: true, isDeleted: false },
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -101,7 +108,10 @@ export async function getParties(): Promise<PartySummary[]> {
 export async function getRecentTransactions(
   limit: number = 10
 ): Promise<RecentTransaction[]> {
+  const userId = await requireAuth();
+
   const transactions = await prisma.transaction.findMany({
+    where: { userId, isDeleted: false },
     take: limit,
     orderBy: { date: "desc" },
     include: {
@@ -129,7 +139,10 @@ export async function getRecentTransactions(
 
 // Get stock summary
 export async function getStockSummary(): Promise<StockSummary[]> {
+  const userId = await requireAuth();
+
   const stocks = await prisma.stock.findMany({
+    where: { userId, isDeleted: false },
     orderBy: { commodityType: "asc" },
     select: {
       id: true,
@@ -158,9 +171,13 @@ export async function getStockSummary(): Promise<StockSummary[]> {
 
 // Get parties who owe money (receivables)
 export async function getReceivables(): Promise<PartySummary[]> {
+  const userId = await requireAuth();
+
   const parties = await prisma.party.findMany({
     where: {
+      userId,
       isActive: true,
+      isDeleted: false,
       totalDue: { gt: 0 },
     },
     orderBy: { totalDue: "desc" },
@@ -182,9 +199,13 @@ export async function getReceivables(): Promise<PartySummary[]> {
 
 // Get parties we owe money to (payables)
 export async function getPayables(): Promise<PartySummary[]> {
+  const userId = await requireAuth();
+
   const parties = await prisma.party.findMany({
     where: {
+      userId,
       isActive: true,
+      isDeleted: false,
       totalDue: { lt: 0 },
     },
     orderBy: { totalDue: "asc" },

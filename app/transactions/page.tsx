@@ -1,12 +1,14 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireAuth } from "@/lib/auth-utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/app-layout";
 import { formatINR, formatDate, toNumber } from "@/lib/utils";
-import { ArrowDownRight, ArrowUpRight, Plus, IndianRupee } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Plus, IndianRupee, Pencil } from "lucide-react";
+import { DeleteTransactionButton } from "@/components/delete-transaction-button";
 
 function LoadingSkeleton() {
   return (
@@ -19,7 +21,10 @@ function LoadingSkeleton() {
 }
 
 async function TransactionsContent() {
+  const userId = await requireAuth();
+
   const transactions = await prisma.transaction.findMany({
+    where: { userId, isDeleted: false },
     orderBy: { date: "desc" },
     take: 100,
     include: {
@@ -96,6 +101,15 @@ async function TransactionsContent() {
                         {tx.ledgerType === "OFFICIAL" ? "Official" : "Parallel"}
                       </Badge>
                     </div>
+                    <Link href={`/transactions/${tx.id}/edit`}>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Pencil className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    </Link>
+                    <DeleteTransactionButton
+                      transactionId={tx.id}
+                      description={tx.description || tx.category || undefined}
+                    />
                   </div>
                 </div>
               );

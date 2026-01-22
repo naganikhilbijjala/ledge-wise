@@ -55,6 +55,31 @@ enum LedgerType {
 }
 
 // ============================================
+// USERS - Authentication
+// ============================================
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  name         String
+  isAdmin      Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations - user owns all their data
+  accounts       Account[]
+  parties        Party[]
+  transactions   Transaction[]
+  loans          Loan[]
+  stocks         Stock[]
+  stockMovements StockMovement[]
+  categories     Category[]
+
+  @@index([username])
+}
+
+// ============================================
 // ACCOUNTS - Track Cash, Bank, Loans
 // ============================================
 model Account {
@@ -64,13 +89,20 @@ model Account {
   currentBalance Decimal     @default(0) @db.Decimal(15, 2)
   description    String?
   isActive       Boolean     @default(true)
+  isDeleted      Boolean     @default(false)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
+
+  // Owner (optional during migration, will be required after data migration)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
   transactions Transaction[]
 
   @@index([type])
   @@index([isActive])
+  @@index([userId])
+  @@index([isDeleted])
 }
 
 // ============================================
@@ -85,8 +117,13 @@ model Party {
   totalDue     Decimal   @default(0) @db.Decimal(15, 2) // Positive = they owe us, Negative = we owe them
   notes        String?
   isActive     Boolean   @default(true)
+  isDeleted    Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  // Owner (optional during migration, will be required after data migration)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
   transactions   Transaction[]
   stockMovements StockMovement[]
@@ -95,6 +132,8 @@ model Party {
   @@index([type])
   @@index([isActive])
   @@index([name])
+  @@index([userId])
+  @@index([isDeleted])
 }
 
 // ============================================
@@ -108,6 +147,10 @@ model Transaction {
   description String?
   category    String?         // e.g., "Turmeric Purchase", "Loan Repayment", "Transport"
   ledgerType  LedgerType      @default(PARALLEL)
+
+  // Owner (optional during migration, will be required after data migration)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
   // References
   accountId String
@@ -127,6 +170,7 @@ model Transaction {
   // Metadata
   receiptNumber String?
   isReconciled  Boolean  @default(false) // Marked when entered in Tally
+  isDeleted     Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -136,6 +180,8 @@ model Transaction {
   @@index([ledgerType])
   @@index([isReconciled])
   @@index([category])
+  @@index([userId])
+  @@index([isDeleted])
 }
 
 // ============================================
@@ -156,12 +202,17 @@ model Loan {
   // Type: Are we the lender or borrower?
   isGiven Boolean // true = we gave loan, false = we took loan
 
+  // Owner (optional during migration, will be required after data migration)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
   // Party reference
   partyId String
   party   Party  @relation(fields: [partyId], references: [id])
 
   description String?
   isActive    Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -171,6 +222,8 @@ model Loan {
   @@index([partyId])
   @@index([isActive])
   @@index([isGiven])
+  @@index([userId])
+  @@index([isDeleted])
 }
 
 // ============================================
@@ -184,13 +237,20 @@ model Stock {
   unit          String        @default("KG")
   avgCostPerKg  Decimal       @default(0) @db.Decimal(15, 2)
   location      String?       // e.g., "Godown 1", "Processing Unit"
+  isDeleted     Boolean       @default(false)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+
+  // Owner (optional during migration, will be required after data migration)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
   movements StockMovement[]
 
   @@unique([commodityType, name, location])
   @@index([commodityType])
+  @@index([userId])
+  @@index([isDeleted])
 }
 
 // ============================================
@@ -206,6 +266,11 @@ model StockMovement {
   description   String?
   vehicleNumber String?           // For tracking shipments
   bagsCount     Int?              // Number of bags
+  isDeleted     Boolean           @default(false)
+
+  // Owner (optional during migration, will be required after data migration)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
   // References
   stockId String
@@ -224,6 +289,8 @@ model StockMovement {
   @@index([stockId])
   @@index([partyId])
   @@index([type])
+  @@index([userId])
+  @@index([isDeleted])
 }
 
 // ============================================
@@ -231,25 +298,18 @@ model StockMovement {
 // ============================================
 model Category {
   id        String   @id @default(cuid())
-  name      String   @unique
+  name      String
   icon      String?
   color     String?
   isDefault Boolean  @default(false)
+  isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
-}
 
-// ============================================
-// USERS - Authentication
-// ============================================
-model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  passwordHash String
-  name         String
-  isAdmin      Boolean  @default(false)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  // Owner (null = system default category available to all)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
-  @@index([username])
+  @@index([userId])
+  @@index([isDeleted])
+  @@index([name])
 }

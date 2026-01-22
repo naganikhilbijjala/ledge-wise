@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { createTransaction } from "@/lib/transaction-actions";
-import { ArrowDownLeft, ArrowUpRight, Check, Loader2 } from "lucide-react";
+import { createTransaction, updateTransaction } from "@/lib/transaction-actions";
+import { createParty } from "@/lib/party-actions";
+import { ArrowDownLeft, ArrowUpRight, Check, Loader2, Plus, X } from "lucide-react";
+import type { LedgerType, TransactionType, PartyType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Account {
@@ -28,25 +30,48 @@ interface Category {
   name: string;
 }
 
+interface TransactionData {
+  id: string;
+  accountId: string;
+  amount: number;
+  type: TransactionType;
+  partyId: string | null;
+  description: string | null;
+  category: string | null;
+  ledgerType: LedgerType;
+}
+
 interface Props {
   accounts: Account[];
   parties: Party[];
   categories: Category[];
+  editTransaction?: TransactionData;
 }
 
-export function QuickEntryForm({ accounts, parties, categories }: Props) {
+export function QuickEntryForm({ accounts, parties: initialParties, categories, editTransaction }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [success, setSuccess] = useState(false);
+  const isEditMode = !!editTransaction;
+
+  // Party management
+  const [parties, setParties] = useState(initialParties);
+  const [showAddParty, setShowAddParty] = useState(false);
+  const [isAddingParty, setIsAddingParty] = useState(false);
+  const [newParty, setNewParty] = useState({
+    name: "",
+    type: "CUSTOMER" as PartyType,
+    phone: "",
+  });
 
   const [formData, setFormData] = useState({
-    accountId: accounts[0]?.id || "",
-    amount: "",
-    type: "OUT" as "IN" | "OUT",
-    partyId: "",
-    description: "",
-    category: "",
-    ledgerType: "PARALLEL" as "OFFICIAL" | "PARALLEL",
+    accountId: editTransaction?.accountId || accounts[0]?.id || "",
+    amount: editTransaction?.amount?.toString() || "",
+    type: (editTransaction?.type || "OUT") as "IN" | "OUT",
+    partyId: editTransaction?.partyId || "",
+    description: editTransaction?.description || "",
+    category: editTransaction?.category || "",
+    ledgerType: (editTransaction?.ledgerType || "PARALLEL") as "OFFICIAL" | "PARALLEL",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,29 +83,73 @@ export function QuickEntryForm({ accounts, parties, categories }: Props) {
 
     startTransition(async () => {
       try {
-        await createTransaction({
-          accountId: formData.accountId,
-          amount: parseFloat(formData.amount),
-          type: formData.type,
-          partyId: formData.partyId || undefined,
-          description: formData.description || undefined,
-          category: formData.category || undefined,
-          ledgerType: formData.ledgerType,
-        });
+        if (isEditMode && editTransaction) {
+          await updateTransaction({
+            id: editTransaction.id,
+            accountId: formData.accountId,
+            amount: parseFloat(formData.amount),
+            type: formData.type,
+            partyId: formData.partyId || undefined,
+            description: formData.description || undefined,
+            category: formData.category || undefined,
+            ledgerType: formData.ledgerType,
+          });
 
-        setSuccess(true);
-        setTimeout(() => {
-          setSuccess(false);
-          setFormData((prev) => ({
-            ...prev,
-            amount: "",
-            description: "",
-          }));
-        }, 1500);
+          setSuccess(true);
+          setTimeout(() => {
+            router.push("/transactions");
+          }, 1500);
+        } else {
+          await createTransaction({
+            accountId: formData.accountId,
+            amount: parseFloat(formData.amount),
+            type: formData.type,
+            partyId: formData.partyId || undefined,
+            description: formData.description || undefined,
+            category: formData.category || undefined,
+            ledgerType: formData.ledgerType,
+          });
+
+          setSuccess(true);
+          setTimeout(() => {
+            setSuccess(false);
+            setFormData((prev) => ({
+              ...prev,
+              amount: "",
+              description: "",
+            }));
+          }, 1500);
+        }
       } catch (error) {
-        console.error("Failed to create transaction:", error);
+        console.error("Failed to save transaction:", error);
       }
     });
+  };
+
+  const handleAddParty = async () => {
+    if (!newParty.name.trim()) return;
+
+    setIsAddingParty(true);
+    try {
+      const created = await createParty({
+        name: newParty.name.trim(),
+        type: newParty.type,
+        phone: newParty.phone || undefined,
+      });
+
+      // Add to local parties list and select it
+      setParties((prev) => [...prev, { id: created.id, name: created.name, type: created.type }]);
+      setFormData((prev) => ({ ...prev, partyId: created.id }));
+
+      // Reset and close
+      setNewParty({ name: "", type: "CUSTOMER", phone: "" });
+      setShowAddParty(false);
+    } catch (error) {
+      console.error("Failed to create party:", error);
+      alert("Failed to create party. Please try again.");
+    } finally {
+      setIsAddingParty(false);
+    }
   };
 
   if (success) {
@@ -91,7 +160,7 @@ export function QuickEntryForm({ accounts, parties, categories }: Props) {
             <Check className="h-8 w-8 text-green-600" />
           </div>
           <p className="text-lg font-medium text-green-800">
-            Transaction Saved!
+            Transaction {isEditMode ? "Updated" : "Saved"}!
           </p>
         </CardContent>
       </Card>
@@ -173,21 +242,96 @@ export function QuickEntryForm({ accounts, parties, categories }: Props) {
 
           {/* Party Selection */}
           <div className="space-y-2">
-            <Label htmlFor="party">Party (Optional)</Label>
-            <Select
-              id="party"
-              value={formData.partyId}
-              onChange={(e) =>
-                setFormData((p) => ({ ...p, partyId: e.target.value }))
-              }
-            >
-              <option value="">No party</option>
-              {parties.map((party) => (
-                <option key={party.id} value={party.id}>
-                  {party.name} ({party.type})
-                </option>
-              ))}
-            </Select>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="party">Party (Optional)</Label>
+              <button
+                type="button"
+                onClick={() => setShowAddParty(!showAddParty)}
+                className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1"
+              >
+                {showAddParty ? (
+                  <>
+                    <X size={14} />
+                    Cancel
+                  </>
+                ) : (
+                  <>
+                    <Plus size={14} />
+                    Add New
+                  </>
+                )}
+              </button>
+            </div>
+
+            {showAddParty ? (
+              <div className="space-y-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Party name *"
+                    value={newParty.name}
+                    onChange={(e) =>
+                      setNewParty((p) => ({ ...p, name: e.target.value }))
+                    }
+                    autoFocus
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Select
+                    value={newParty.type}
+                    onChange={(e) =>
+                      setNewParty((p) => ({ ...p, type: e.target.value as PartyType }))
+                    }
+                  >
+                    <option value="CUSTOMER">Seller (Farmer)</option>
+                    <option value="VENDOR">Buyer (Company)</option>
+                    <option value="LENDER">Lender</option>
+                    <option value="BORROWER">Borrower</option>
+                  </Select>
+                  <Input
+                    placeholder="Phone (optional)"
+                    value={newParty.phone}
+                    onChange={(e) =>
+                      setNewParty((p) => ({ ...p, phone: e.target.value }))
+                    }
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="warning"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleAddParty}
+                  disabled={isAddingParty || !newParty.name.trim()}
+                >
+                  {isAddingParty ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Party
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <Select
+                id="party"
+                value={formData.partyId}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, partyId: e.target.value }))
+                }
+              >
+                <option value="">No party</option>
+                {parties.map((party) => (
+                  <option key={party.id} value={party.id}>
+                    {party.name} ({party.type})
+                  </option>
+                ))}
+              </Select>
+            )}
           </div>
 
           {/* Category */}
@@ -267,11 +411,11 @@ export function QuickEntryForm({ accounts, parties, categories }: Props) {
             {isPending ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Saving...
+                {isEditMode ? "Updating..." : "Saving..."}
               </>
             ) : (
               <>
-                Save {formData.type === "IN" ? "Income" : "Expense"}
+                {isEditMode ? "Update" : "Save"} {formData.type === "IN" ? "Income" : "Expense"}
               </>
             )}
           </Button>

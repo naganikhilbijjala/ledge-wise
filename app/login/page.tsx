@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,8 @@ import { Loader2, Lock } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const registered = searchParams.get("registered");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
@@ -57,6 +60,12 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {registered && (
+              <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg text-sm">
+                Account created successfully! Please sign in.
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
                 {error}
@@ -114,8 +123,11 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <p className="text-center text-xs text-gray-400 mt-6">
-            Private Financial Tracking System
+          <p className="text-center text-sm text-gray-600 mt-6">
+            Don&apos;t have an account?{" "}
+            <Link href="/signup" className="text-amber-600 hover:underline font-medium">
+              Sign up
+            </Link>
           </p>
         </CardContent>
       </Card>

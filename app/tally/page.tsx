@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,9 +35,13 @@ function LoadingSkeleton() {
 }
 
 async function TallyContent({ searchParams }: { searchParams: SearchParams }) {
+  const userId = await requireAuth();
   const { ledgerType, reconciled, startDate, endDate } = searchParams;
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = {
+    userId,
+    isDeleted: false,
+  };
 
   if (ledgerType && ledgerType !== "ALL") {
     where.ledgerType = ledgerType;

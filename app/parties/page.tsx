@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,8 +20,10 @@ function LoadingSkeleton() {
 }
 
 async function PartiesContent() {
+  const userId = await requireAuth();
+
   const parties = await prisma.party.findMany({
-    where: { isActive: true },
+    where: { userId, isActive: true, isDeleted: false },
     orderBy: { name: "asc" },
     include: {
       _count: {
