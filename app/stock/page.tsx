@@ -6,7 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/app-layout";
 import { formatINR, formatIndianNumber, toNumber } from "@/lib/utils";
-import { Package, Plus, Truck, Pencil } from "lucide-react";
+import { Package, Plus, Truck } from "lucide-react";
+import { EditLink } from "@/components/edit-link";
 
 function LoadingSkeleton() {
   return (
@@ -100,14 +101,7 @@ async function StockContent() {
                     <h3 className="font-semibold text-gray-900 text-lg">
                       {stock.name}
                     </h3>
-                    <Link
-                      href={`/stock/${stock.id}/edit`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                        <Pencil className="h-3 w-3 text-gray-500" />
-                      </Button>
-                    </Link>
+                    <EditLink href={`/stock/${stock.id}/edit`} size="default" />
                   </div>
                   {stock.location && (
                     <p className="text-xs text-gray-500 mb-3">{stock.location}</p>

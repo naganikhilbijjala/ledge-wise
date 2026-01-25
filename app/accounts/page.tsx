@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/app-layout";
 import { formatINR, toNumber, getAccountTypeColor, getAccountTypeLabel } from "@/lib/utils";
-import { Wallet, Building2, TrendingUp, TrendingDown, Plus, Pencil } from "lucide-react";
+import { Wallet, Building2, TrendingUp, TrendingDown, Plus } from "lucide-react";
+import { EditLink } from "@/components/edit-link";
 
 function LoadingSkeleton() {
   return (
@@ -155,14 +156,7 @@ async function AccountsContent() {
                         </Badge>
                       </div>
                     </div>
-                    <Link
-                      href={`/accounts/${account.id}/edit`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <Pencil className="h-4 w-4 text-gray-500" />
-                      </Button>
-                    </Link>
+                    <EditLink href={`/accounts/${account.id}/edit`} />
                   </div>
                   <div className="mt-4">
                     <p className="text-sm text-gray-500">Current Balance</p>
