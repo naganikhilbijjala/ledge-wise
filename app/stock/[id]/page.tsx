@@ -22,6 +22,7 @@ import {
   Settings,
 } from "lucide-react";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
+import { AdjustBalanceButton } from "@/components/adjust-balance-button";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -76,27 +77,32 @@ async function StockDetailContent({ id }: { id: string }) {
     ADJUSTMENT: "bg-gray-100 text-gray-800",
   };
 
-  // Calculate running quantity (from oldest to newest, then reverse)
-  let runningQuantity = 0;
-  const transactionsWithBalance = [...stock.transactions]
-    .reverse()
-    .map((tx) => {
-      const qtyInKg = toNumber(tx.stockQuantity);
-      const movementType = tx.stockMovementType;
-      let qtyChange = 0;
+  // Calculate running quantity by working backwards from current stock
+  // Start with current stock and subtract/add as we go back in time
+  let runningQuantity = quantityInKg;
+  const transactionsWithBalance = stock.transactions.map((tx) => {
+    const qtyInKg = toNumber(tx.stockQuantity);
+    const movementType = tx.stockMovementType;
+    const txType = tx.type; // IN or OUT
+    let qtyChange = 0;
 
-      if (movementType === "PURCHASE") {
-        qtyChange = qtyInKg;
-      } else if (movementType === "SALE" || movementType === "PROCESSING") {
-        qtyChange = -qtyInKg;
-      } else if (movementType === "ADJUSTMENT") {
-        qtyChange = qtyInKg;
-      }
+    if (movementType === "PURCHASE") {
+      qtyChange = qtyInKg;
+    } else if (movementType === "SALE" || movementType === "PROCESSING") {
+      qtyChange = -qtyInKg;
+    } else if (movementType === "ADJUSTMENT") {
+      // For adjustments, use transaction type to determine direction
+      // IN = stock increased, OUT = stock decreased
+      qtyChange = txType === "IN" ? qtyInKg : -qtyInKg;
+    }
 
-      runningQuantity += qtyChange;
-      return { ...tx, runningQuantity: runningQuantity / 100, qtyChangeInQuintals: qtyChange / 100 };
-    })
-    .reverse();
+    // This transaction's balance is the running quantity at this point
+    const balanceAtThisPoint = runningQuantity;
+    // Then go back in time (subtract the change to get previous balance)
+    runningQuantity -= qtyChange;
+
+    return { ...tx, runningQuantity: balanceAtThisPoint / 100, qtyChangeInQuintals: qtyChange / 100 };
+  });
 
   return (
     <div className="space-y-6">
@@ -136,6 +142,15 @@ async function StockDetailContent({ id }: { id: string }) {
                 <p className="text-lg font-bold text-amber-600">
                   {formatINR(totalValue)}
                 </p>
+              </div>
+              <div className="pt-2">
+                <AdjustBalanceButton
+                  type="stock"
+                  id={stock.id}
+                  name={stock.name}
+                  currentValue={quantityInKg}
+                  unit={stock.unit || "QUINTAL"}
+                />
               </div>
             </div>
           </div>

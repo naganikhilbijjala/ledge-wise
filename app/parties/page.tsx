@@ -29,7 +29,26 @@ async function PartiesContent() {
       _count: {
         select: { transactions: true },
       },
+      transactions: {
+        where: { isDeleted: false, paymentMode: "CREDIT" },
+        select: {
+          amount: true,
+          type: true,
+        },
+      },
     },
+  });
+
+  // Calculate balance for each party from CREDIT transactions only
+  const partiesWithBalance = parties.map((party) => {
+    let balance = 0;
+    for (const tx of party.transactions) {
+      const amount = toNumber(tx.amount);
+      // OUT (we paid them) = they owe us more → positive
+      // IN (we received from them) = we owe them more → negative
+      balance += tx.type === "OUT" ? amount : -amount;
+    }
+    return { ...party, calculatedBalance: balance };
   });
 
   const partyTypeColors: Record<string, string> = {
@@ -47,13 +66,13 @@ async function PartiesContent() {
   };
 
   // Group parties by type
-  const customers = parties.filter((p) => p.type === "CUSTOMER");
-  const vendors = parties.filter((p) => p.type === "VENDOR");
-  const lenders = parties.filter((p) => p.type === "LENDER");
-  const borrowers = parties.filter((p) => p.type === "BORROWER");
+  const customers = partiesWithBalance.filter((p) => p.type === "CUSTOMER");
+  const vendors = partiesWithBalance.filter((p) => p.type === "VENDOR");
+  const lenders = partiesWithBalance.filter((p) => p.type === "LENDER");
+  const borrowers = partiesWithBalance.filter((p) => p.type === "BORROWER");
 
   const renderPartyList = (
-    partyList: typeof parties,
+    partyList: typeof partiesWithBalance,
     title: string,
     subtitle: string
   ) => {
@@ -67,7 +86,7 @@ async function PartiesContent() {
         </div>
         <div className="space-y-2">
           {partyList.map((party) => {
-            const due = toNumber(party.totalDue);
+            const due = party.calculatedBalance;
             return (
               <Link key={party.id} href={`/parties/${party.id}`}>
                 <Card className="hover:shadow-md transition-shadow cursor-pointer">
@@ -135,7 +154,7 @@ async function PartiesContent() {
       {renderPartyList(lenders, "Lenders", "People you borrowed money from")}
       {renderPartyList(borrowers, "Borrowers", "People who borrowed from you")}
 
-      {parties.length === 0 && (
+      {partiesWithBalance.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="h-12 w-12 text-gray-300 mb-4" />

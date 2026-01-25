@@ -189,6 +189,7 @@ async function calculatePartyBalances(userId: string): Promise<Map<string, { id:
         select: {
           amount: true,
           type: true,
+          paymentMode: true,
         },
       },
     },
@@ -199,10 +200,15 @@ async function calculatePartyBalances(userId: string): Promise<Map<string, { id:
   for (const party of parties) {
     let balance = 0;
     for (const tx of party.transactions) {
+      // Only CREDIT transactions affect party balance
+      // CASH transactions are settled immediately and don't create outstanding balances
+      if (tx.paymentMode !== "CREDIT") continue;
+
       const amount = toNumber(tx.amount);
-      // Credit (IN) = they owe us more (positive)
-      // Debit (OUT) = we owe them more (negative)
-      balance += tx.type === "IN" ? amount : -amount;
+      // For CREDIT transactions from party's perspective:
+      // OUT (we paid them) = reduces what we owe them → positive balance (they owe us)
+      // IN (we received from them) = increases what we owe them → negative balance (we owe them)
+      balance += tx.type === "OUT" ? amount : -amount;
     }
     balanceMap.set(party.id, {
       id: party.id,

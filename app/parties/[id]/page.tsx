@@ -20,6 +20,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
+import { AdjustBalanceButton } from "@/components/adjust-balance-button";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -71,20 +72,43 @@ async function PartyLedgerContent({ id }: { id: string }) {
   };
 
   // Calculate running balance for ledger view from transactions
-  // Credit (IN) = increases what they owe us (positive)
-  // Debit (OUT) = increases what we owe them (negative)
+  // From the party's perspective (what they owe us):
+  // - IN (Credit to our account) = We received money from party → They gave us goods/services on credit
+  //   This means they owe us less (we received payment) → decrease balance (negative)
+  // - OUT (Debit from our account) = We paid money to party → We bought goods/services on credit
+  //   This means they owe us more (we gave them payment for future goods) → increase balance (positive)
+  //
+  // But for stock purchases where payment is made at time of purchase:
+  // - OUT means we PAID them → transaction is settled, no outstanding balance
+  // - IN means we RECEIVED from them → transaction is settled, no outstanding balance
+  //
+  // The correct interpretation for a khata/ledger:
+  // Only CREDIT transactions affect the party balance (khata)
+  // CASH transactions are settled immediately and don't create outstanding balance
+  //
+  // For CREDIT transactions:
+  // - OUT (we paid them) = reduces what we owe them → positive balance change
+  // - IN (we received from them) = increases what we owe them → negative balance change
+  //
+  // Positive balance = They owe us (Dr)
+  // Negative balance = We owe them (Cr)
   let runningBalance = 0;
   const transactionsWithBalance = [...party.transactions]
     .reverse()
     .map((tx) => {
       const amount = toNumber(tx.amount);
-      const balanceChange = tx.type === "IN" ? amount : -amount;
+      // Only CREDIT transactions affect the running balance
+      // CASH transactions show in history but don't change balance
+      const isCredit = tx.paymentMode === "CREDIT";
+      const balanceChange = isCredit
+        ? (tx.type === "OUT" ? amount : -amount)
+        : 0;
       runningBalance += balanceChange;
-      return { ...tx, runningBalance };
+      return { ...tx, runningBalance, isCredit };
     })
     .reverse();
 
-  // The final running balance IS the current due (calculated, not stored)
+  // The final running balance IS the current due (calculated only from CREDIT transactions)
   const due = runningBalance;
 
   return (
@@ -121,13 +145,21 @@ async function PartyLedgerContent({ id }: { id: string }) {
                 )}
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-500">
-                {due >= 0 ? "They Owe Us" : "We Owe Them"}
-              </p>
-              <p className={`text-2xl font-bold ${getAmountColor(due)}`}>
-                {formatINR(Math.abs(due))}
-              </p>
+            <div className="text-right space-y-2">
+              <div>
+                <p className="text-sm text-gray-500">
+                  {due >= 0 ? "They Owe Us" : "We Owe Them"}
+                </p>
+                <p className={`text-2xl font-bold ${getAmountColor(due)}`}>
+                  {formatINR(Math.abs(due))}
+                </p>
+              </div>
+              <AdjustBalanceButton
+                type="party"
+                id={party.id}
+                name={party.name}
+                currentValue={due}
+              />
             </div>
           </div>
           {party.notes && (
@@ -186,9 +218,18 @@ async function PartyLedgerContent({ id }: { id: string }) {
                         </td>
                         <td className="py-3 px-2">
                           <div>
-                            <p className="text-gray-900">
-                              {tx.description || tx.category || "Transaction"}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-gray-900">
+                                {tx.description || tx.category || "Transaction"}
+                              </p>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                tx.isCredit
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-green-100 text-green-700"
+                              }`}>
+                                {tx.isCredit ? "Credit" : "Cash"}
+                              </span>
+                            </div>
                             <p className="text-xs text-gray-500">
                               via {tx.account.name}
                             </p>

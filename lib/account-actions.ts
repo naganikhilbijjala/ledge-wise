@@ -170,3 +170,64 @@ export async function getAccountsForUser() {
     description: account.description,
   }));
 }
+
+interface AdjustAccountBalanceInput {
+  accountId: string;
+  newBalance: number;
+  reason?: string;
+}
+
+export async function adjustAccountBalance(input: AdjustAccountBalanceInput) {
+  const userId = await requireAuth();
+  const { accountId, newBalance, reason } = input;
+
+  // Verify ownership
+  const account = await prisma.account.findFirst({
+    where: { id: accountId, userId, isDeleted: false },
+  });
+
+  if (!account) {
+    throw new Error("Account not found");
+  }
+
+  const currentBalance = Number(account.currentBalance);
+  const difference = newBalance - currentBalance;
+
+  if (difference === 0) {
+    return { success: true, message: "No adjustment needed" };
+  }
+
+  // Create an adjustment transaction
+  const adjustmentType = difference > 0 ? "IN" : "OUT";
+  const adjustmentAmount = Math.abs(difference);
+  const description = reason
+    ? `Balance Adjustment: ${reason}`
+    : `Balance Adjustment (${currentBalance} → ${newBalance})`;
+
+  await prisma.transaction.create({
+    data: {
+      amount: adjustmentAmount,
+      type: adjustmentType,
+      description,
+      category: "Adjustment",
+      ledgerType: "PARALLEL",
+      accountId,
+      userId,
+    },
+  });
+
+  // Update account balance directly to the new value
+  await prisma.account.update({
+    where: { id: accountId },
+    data: {
+      currentBalance: newBalance,
+    },
+  });
+
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${accountId}`);
+  revalidatePath("/transactions");
+  revalidatePath("/");
+
+  return { success: true, difference };
+}

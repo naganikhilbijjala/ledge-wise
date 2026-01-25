@@ -3,7 +3,7 @@
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth-utils";
-import type { LedgerType, TransactionType } from "@/lib/types";
+import type { LedgerType, TransactionType, PaymentMode } from "@/lib/types";
 
 interface CreateTransactionInput {
   accountId: string;
@@ -14,6 +14,8 @@ interface CreateTransactionInput {
   description?: string;
   category?: string;
   ledgerType: LedgerType;
+  paymentMode?: PaymentMode; // CASH = settled, CREDIT = affects party balance
+  date?: Date; // Transaction date
   // Stock purchase fields
   stockId?: string;
   quantity?: number; // quantity in selected unit
@@ -36,6 +38,8 @@ export async function createTransaction(input: CreateTransactionInput) {
     description,
     category,
     ledgerType,
+    paymentMode,
+    date,
     stockId,
     quantity,
     quantityUnit,
@@ -171,6 +175,8 @@ export async function createTransaction(input: CreateTransactionInput) {
       description: finalDescription || null,
       category,
       ledgerType,
+      paymentMode: paymentMode || "CASH",
+      date: date || new Date(),
       accountId,
       toAccountId: type === "TRANSFER" ? toAccountId : null,
       partyId: partyId || null,
@@ -320,6 +326,8 @@ export async function getTransactionById(id: string) {
     description: transaction.description,
     category: transaction.category,
     ledgerType: transaction.ledgerType as LedgerType,
+    paymentMode: transaction.paymentMode as PaymentMode,
+    date: transaction.date,
     // Stock data - prefer embedded fields, fallback to legacy stockMovement
     stockMovement: hasEmbeddedStock ? {
       id: transaction.id, // Use transaction id as movement id for embedded
@@ -348,15 +356,26 @@ interface UpdateTransactionInput {
   description?: string;
   category?: string;
   ledgerType: LedgerType;
+  paymentMode?: PaymentMode;
+  date?: Date; // Transaction date
+  // Stock purchase fields
+  stockId?: string;
+  quantity?: number;
+  quantityUnit?: "KG" | "QUINTAL";
+  pricePerUnit?: number;
+  includeTax?: boolean;
 }
 
 export async function updateTransaction(input: UpdateTransactionInput) {
   const userId = await requireAuth();
-  const { id, accountId, amount, type, partyId, description, category, ledgerType } = input;
+  const { id, accountId, amount, type, partyId, description, category, ledgerType, paymentMode, date, stockId, quantity, quantityUnit, pricePerUnit, includeTax } = input;
 
   // Get the original transaction to calculate balance/due adjustments
   const originalTransaction = await prisma.transaction.findFirst({
     where: { id, userId, isDeleted: false },
+    include: {
+      stock: true,
+    },
   });
 
   if (!originalTransaction) {
@@ -371,13 +390,25 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     throw new Error("Account not found");
   }
 
-  // Verify new party ownership if provided
+  // Verify new party ownership and get party type if provided
+  let partyType: string | null = null;
   if (partyId) {
     const newParty = await prisma.party.findFirst({
       where: { id: partyId, userId, isDeleted: false },
     });
     if (!newParty) {
       throw new Error("Party not found");
+    }
+    partyType = newParty.type;
+  }
+
+  // Verify stock ownership if provided
+  if (stockId) {
+    const stockExists = await prisma.stock.findFirst({
+      where: { id: stockId, userId, isDeleted: false },
+    });
+    if (!stockExists) {
+      throw new Error("Stock not found");
     }
   }
 
@@ -410,22 +441,127 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     });
   }
 
+  // Handle stock reversal if original transaction had stock
+  const hadOriginalStock = originalTransaction.stockId && originalTransaction.stockQuantity;
+  if (hadOriginalStock && originalTransaction.stock) {
+    const originalStockQty = Number(originalTransaction.stockQuantity);
+    const originalStockType = originalTransaction.stockMovementType;
+    const currentStockQty = Number(originalTransaction.stock.quantity);
+
+    // Reverse the original stock quantity change
+    let revertedQuantity = currentStockQty;
+    if (originalStockType === "PURCHASE") {
+      revertedQuantity = currentStockQty - originalStockQty;
+    } else if (originalStockType === "SALE") {
+      revertedQuantity = currentStockQty + originalStockQty;
+    }
+
+    await prisma.stock.update({
+      where: { id: originalTransaction.stockId! },
+      data: { quantity: Math.max(0, revertedQuantity) },
+    });
+  }
+
+  // Calculate final amount with tax if applicable for stock transactions
+  let finalAmount = amount;
+  let taxAmount = 0;
+  const isTraderPurchase = partyType && partyType !== "CUSTOMER" && includeTax;
+
+  if (isTraderPurchase && stockId) {
+    taxAmount = Math.round(amount * TRADER_TAX_RATE * 100) / 100;
+    finalAmount = amount + taxAmount;
+  }
+
+  // Build description with stock and tax info
+  let finalDescription = description || "";
+  if (stockId && quantity && quantityUnit) {
+    const stockInfo = `Stock: ${quantity} ${quantityUnit} @ ₹${pricePerUnit}/${quantityUnit}`;
+    finalDescription = finalDescription
+      ? `${finalDescription} | ${stockInfo}`
+      : stockInfo;
+  }
+  if (taxAmount > 0) {
+    finalDescription = finalDescription
+      ? `${finalDescription} | Tax (5%): ₹${taxAmount.toFixed(2)}`
+      : `Tax (5%): ₹${taxAmount.toFixed(2)}`;
+  }
+
+  // Prepare new stock data
+  let stockMovementType: "PURCHASE" | "SALE" | null = null;
+  let qtyInKg: number | null = null;
+  let pricePerKg: number | null = null;
+
+  if (stockId && quantity && pricePerUnit) {
+    // Re-fetch the stock to get the current quantity AFTER reversal
+    const freshStock = await prisma.stock.findFirst({
+      where: { id: stockId, userId, isDeleted: false },
+    });
+
+    if (!freshStock) {
+      throw new Error("Stock not found");
+    }
+
+    // Convert quantity to KG for storage
+    qtyInKg = quantityUnit === "QUINTAL" ? quantity * 100 : quantity;
+    pricePerKg = quantityUnit === "QUINTAL" ? pricePerUnit / 100 : pricePerUnit;
+
+    // Determine movement type based on transaction type
+    stockMovementType = type === "OUT" ? "PURCHASE" : "SALE";
+
+    // Update stock quantity with new values (using fresh quantity after reversal)
+    const currentQty = Number(freshStock.quantity);
+    const currentAvgCost = Number(freshStock.avgCostPerKg);
+
+    if (stockMovementType === "PURCHASE") {
+      // Buying stock - increase quantity and recalculate weighted average cost
+      const totalCurrentValue = currentQty * currentAvgCost;
+      const newValue = qtyInKg * pricePerKg;
+      const newQuantity = currentQty + qtyInKg;
+      const newAvgCost = newQuantity > 0 ? (totalCurrentValue + newValue) / newQuantity : pricePerKg;
+
+      await prisma.stock.update({
+        where: { id: stockId },
+        data: {
+          quantity: newQuantity,
+          avgCostPerKg: newAvgCost,
+        },
+      });
+    } else {
+      // Selling stock - decrease quantity
+      const newQuantity = Math.max(0, currentQty - qtyInKg);
+
+      await prisma.stock.update({
+        where: { id: stockId },
+        data: {
+          quantity: newQuantity,
+        },
+      });
+    }
+  }
+
   // Update the transaction
   const updatedTransaction = await prisma.transaction.update({
     where: { id },
     data: {
-      amount,
+      amount: finalAmount,
       type,
-      description,
+      description: finalDescription || null,
       category,
       ledgerType,
+      paymentMode: paymentMode || undefined,
+      date: date || undefined,
       accountId,
       partyId: partyId || null,
+      // Stock fields
+      stockId: stockId || null,
+      stockMovementType,
+      stockQuantity: qtyInKg,
+      stockPricePerKg: pricePerKg,
     },
   });
 
   // Apply the new account balance change
-  const newBalanceChange = type === "IN" ? amount : -amount;
+  const newBalanceChange = type === "IN" ? finalAmount : -finalAmount;
   await prisma.account.update({
     where: { id: accountId },
     data: {
@@ -437,7 +573,7 @@ export async function updateTransaction(input: UpdateTransactionInput) {
 
   // Apply the new party due change if applicable
   if (partyId) {
-    const newDueChange = type === "IN" ? -amount : amount;
+    const newDueChange = type === "IN" ? -finalAmount : finalAmount;
     await prisma.party.update({
       where: { id: partyId },
       data: {
@@ -452,6 +588,7 @@ export async function updateTransaction(input: UpdateTransactionInput) {
   revalidatePath("/transactions");
   revalidatePath("/parties");
   revalidatePath("/accounts");
+  revalidatePath("/stock");
 
   return updatedTransaction;
 }

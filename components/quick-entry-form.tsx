@@ -10,7 +10,7 @@ import { Select } from "@/components/ui/select";
 import { createTransaction, updateTransaction } from "@/lib/transaction-actions";
 import { createParty } from "@/lib/party-actions";
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Check, Loader2, Plus, X, Package } from "lucide-react";
-import type { LedgerType, TransactionType, PartyType } from "@/lib/types";
+import type { LedgerType, TransactionType, PartyType, PaymentMode } from "@/lib/types";
 import { cn, formatINR } from "@/lib/utils";
 
 interface Account {
@@ -53,6 +53,8 @@ interface TransactionData {
   description: string | null;
   category: string | null;
   ledgerType: LedgerType;
+  paymentMode: PaymentMode;
+  date: Date;
   stockMovement?: StockMovementData | null;
 }
 
@@ -102,6 +104,18 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
     includeTax: false,
   });
 
+  // Format date for datetime-local input field (YYYY-MM-DDTHH:mm)
+  const formatDateTimeForInput = (date: Date | undefined) => {
+    const d = date ? new Date(date) : new Date();
+    // Format: YYYY-MM-DDTHH:mm (local time)
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const [formData, setFormData] = useState({
     accountId: editTransaction?.accountId || accounts[0]?.id || "",
     toAccountId: "",
@@ -111,6 +125,8 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
     description: editTransaction?.description || "",
     category: editTransaction?.category || "",
     ledgerType: (editTransaction?.ledgerType || "PARALLEL") as "OFFICIAL" | "PARALLEL",
+    paymentMode: (editTransaction?.paymentMode || "CASH") as "CASH" | "CREDIT",
+    date: formatDateTimeForInput(editTransaction?.date),
   });
 
   // Get selected party type
@@ -182,6 +198,14 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             description: formData.description || undefined,
             category: formData.category || undefined,
             ledgerType: formData.ledgerType,
+            paymentMode: formData.partyId ? formData.paymentMode : "CASH",
+            date: new Date(formData.date),
+            // Stock purchase fields for edit
+            stockId: hasStockMovement && stockData.stockId ? stockData.stockId : undefined,
+            quantity: hasStockMovement && stockData.quantity ? parseFloat(stockData.quantity) : undefined,
+            quantityUnit: hasStockMovement ? stockData.quantityUnit : undefined,
+            pricePerUnit: hasStockMovement && stockData.pricePerUnit ? parseFloat(stockData.pricePerUnit) : undefined,
+            includeTax: hasStockMovement ? stockData.includeTax : undefined,
           });
 
           setSuccess(true);
@@ -198,6 +222,8 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             description: formData.description || undefined,
             category: formData.category || undefined,
             ledgerType: formData.ledgerType,
+            paymentMode: formData.partyId ? formData.paymentMode : "CASH",
+            date: new Date(formData.date),
             // Stock purchase fields
             stockId: isStockPurchase && stockData.stockId ? stockData.stockId : undefined,
             quantity: isStockPurchase && stockData.quantity ? parseFloat(stockData.quantity) : undefined,
@@ -281,19 +307,6 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
-              onClick={() => setFormData((p) => ({ ...p, type: "IN", toAccountId: "" }))}
-              className={cn(
-                "flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors",
-                formData.type === "IN"
-                  ? "bg-green-500 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              )}
-            >
-              <ArrowDownLeft size={20} />
-              Credit
-            </button>
-            <button
-              type="button"
               onClick={() => setFormData((p) => ({ ...p, type: "OUT", toAccountId: "" }))}
               className={cn(
                 "flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors",
@@ -304,6 +317,19 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             >
               <ArrowUpRight size={20} />
               Debit
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData((p) => ({ ...p, type: "IN", toAccountId: "" }))}
+              className={cn(
+                "flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors",
+                formData.type === "IN"
+                  ? "bg-green-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              )}
+            >
+              <ArrowDownLeft size={20} />
+              Credit
             </button>
             <button
               type="button"
@@ -386,7 +412,7 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
           {/* Stock Transaction Toggle - Show for both Credit (sale) and Debit (purchase) */}
           {(formData.type === "OUT" || formData.type === "IN") && (stocks.length > 0 || hasStockMovement) && (
             <div className="space-y-2">
-              {/* In edit mode with stock, show as info; in create mode, show toggle */}
+              {/* In edit mode with stock, show editable fields; in create mode, show toggle */}
               {isEditMode && hasStockMovement ? (
                 <div className={`space-y-3 p-3 rounded-lg border ${formData.type === "OUT" ? "bg-amber-50 border-amber-200" : "bg-green-50 border-green-200"}`}>
                   <div className="flex items-center gap-2">
@@ -394,33 +420,108 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
                     <span className="text-sm font-medium">
                       Stock {editTransaction?.stockMovement?.type === "PURCHASE" ? "Purchase" : "Sale"}
                     </span>
-                    <span className="text-xs text-gray-500">(Read-only)</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500">Stock Item</p>
-                      <p className="font-medium">{editTransaction?.stockMovement?.stock?.name || "Unknown"}</p>
+
+                  {/* Stock Selection */}
+                  <div className="space-y-1">
+                    <Label htmlFor="stock" className="text-sm">Select Stock *</Label>
+                    <Select
+                      id="stock"
+                      value={stockData.stockId}
+                      onChange={(e) => handleStockDataChange({ stockId: e.target.value })}
+                      required
+                    >
+                      <option value="">Select stock item</option>
+                      {stocks.map((stock) => (
+                        <option key={stock.id} value={stock.id}>
+                          {stock.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  {/* Quantity and Unit */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="quantity" className="text-sm">Quantity *</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        placeholder="0"
+                        value={stockData.quantity}
+                        onChange={(e) => handleStockDataChange({ quantity: e.target.value })}
+                        min="0"
+                        step="0.01"
+                        required
+                      />
                     </div>
-                    <div>
-                      <p className="text-gray-500">Quantity</p>
-                      <p className="font-medium">
-                        {stockData.quantity} {stockData.quantityUnit === "QUINTAL" ? "Quintals" : "KG"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Rate</p>
-                      <p className="font-medium">
-                        {formatINR(parseFloat(stockData.pricePerUnit) || 0)}/{stockData.quantityUnit === "QUINTAL" ? "Quintal" : "KG"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Total</p>
-                      <p className="font-medium">{formatINR(calculateStockAmount())}</p>
+                    <div className="space-y-1">
+                      <Label htmlFor="quantityUnit" className="text-sm">Unit</Label>
+                      <Select
+                        id="quantityUnit"
+                        value={stockData.quantityUnit}
+                        onChange={(e) => handleStockDataChange({ quantityUnit: e.target.value as "KG" | "QUINTAL" })}
+                      >
+                        <option value="QUINTAL">Quintals</option>
+                        <option value="KG">KG</option>
+                      </Select>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500 pt-2 border-t">
-                    To modify stock details, delete this transaction and create a new one.
-                  </p>
+
+                  {/* Price per Unit */}
+                  <div className="space-y-1">
+                    <Label htmlFor="pricePerUnit" className="text-sm">
+                      Price per {stockData.quantityUnit === "QUINTAL" ? "Quintal" : "KG"} (₹) *
+                    </Label>
+                    <Input
+                      id="pricePerUnit"
+                      type="number"
+                      placeholder="0"
+                      value={stockData.pricePerUnit}
+                      onChange={(e) => handleStockDataChange({ pricePerUnit: e.target.value })}
+                      min="0"
+                      step="0.01"
+                      required
+                    />
+                  </div>
+
+                  {/* Tax checkbox - only show for purchases from non-farmer (trader) */}
+                  {formData.type === "OUT" && isTraderPurchase && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-amber-200">
+                      <input
+                        type="checkbox"
+                        id="includeTax"
+                        checked={stockData.includeTax}
+                        onChange={(e) => handleStockDataChange({ includeTax: e.target.checked })}
+                        className="h-4 w-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+                      />
+                      <Label htmlFor="includeTax" className="text-sm cursor-pointer">
+                        Include 5% tax (buying from trader)
+                      </Label>
+                    </div>
+                  )}
+
+                  {/* Amount Summary */}
+                  {calculateStockAmount() > 0 && (
+                    <div className={`pt-2 border-t space-y-1 ${formData.type === "OUT" ? "border-amber-200" : "border-green-200"}`}>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Base Amount:</span>
+                        <span className="font-medium">{formatINR(calculateStockAmount())}</span>
+                      </div>
+                      {stockData.includeTax && calculateTaxAmount() > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Tax (5%):</span>
+                          <span className="font-medium text-amber-600">{formatINR(calculateTaxAmount())}</span>
+                        </div>
+                      )}
+                      {stockData.includeTax && calculateTaxAmount() > 0 && (
+                        <div className="flex justify-between text-sm font-bold">
+                          <span>Total:</span>
+                          <span className={formData.type === "OUT" ? "text-red-600" : "text-green-600"}>{formatINR(totalAmount)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : !isEditMode && (
                 <>
@@ -654,6 +755,48 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
           </div>
           )}
 
+          {/* Payment Mode - Only show when party is selected */}
+          {formData.type !== "TRANSFER" && formData.partyId && (
+            <div className="space-y-2">
+              <Label>Payment Mode</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((p) => ({ ...p, paymentMode: "CASH" }))
+                  }
+                  className={cn(
+                    "py-2 rounded-lg text-sm font-medium transition-colors",
+                    formData.paymentMode === "CASH"
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
+                >
+                  Cash (Paid)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((p) => ({ ...p, paymentMode: "CREDIT" }))
+                  }
+                  className={cn(
+                    "py-2 rounded-lg text-sm font-medium transition-colors",
+                    formData.paymentMode === "CREDIT"
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
+                >
+                  Credit (Udhar)
+                </button>
+              </div>
+              {formData.paymentMode === "CREDIT" && (
+                <p className="text-xs text-orange-600">
+                  This will affect party outstanding balance
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Category */}
           <div className="space-y-2">
             <Label htmlFor="category">Category (Optional)</Label>
@@ -682,6 +825,19 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
               value={formData.description}
               onChange={(e) =>
                 setFormData((p) => ({ ...p, description: e.target.value }))
+              }
+            />
+          </div>
+
+          {/* Date & Time */}
+          <div className="space-y-2">
+            <Label htmlFor="date">Date & Time</Label>
+            <Input
+              id="date"
+              type="datetime-local"
+              value={formData.date}
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, date: e.target.value }))
               }
             />
           </div>

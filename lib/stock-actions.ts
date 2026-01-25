@@ -182,3 +182,105 @@ export async function getStocksForSelect() {
 
   return stocks;
 }
+
+interface AdjustStockQuantityInput {
+  stockId: string;
+  newQuantity: number; // In the stock's display unit (QUINTAL or KG)
+  reason?: string;
+}
+
+export async function adjustStockQuantity(input: AdjustStockQuantityInput) {
+  const userId = await requireAuth();
+  const { stockId, newQuantity, reason } = input;
+
+  // Verify ownership and get stock details
+  const stock = await prisma.stock.findFirst({
+    where: { id: stockId, userId, isDeleted: false },
+  });
+
+  if (!stock) {
+    throw new Error("Stock not found");
+  }
+
+  const unit = stock.unit || "KG";
+  const isQuintal = unit === "QUINTAL";
+
+  // Convert new quantity to KG for storage
+  const newQuantityInKg = isQuintal ? newQuantity * 100 : newQuantity;
+  const currentQuantityInKg = Number(stock.quantity);
+
+  // Calculate difference in KG
+  const differenceInKg = newQuantityInKg - currentQuantityInKg;
+
+  if (differenceInKg === 0) {
+    return { success: true, message: "No adjustment needed" };
+  }
+
+  // Display values for description
+  const currentDisplayQty = isQuintal ? currentQuantityInKg / 100 : currentQuantityInKg;
+  const unitLabel = isQuintal ? "Quintals" : "KG";
+
+  const description = reason
+    ? `Stock Adjustment: ${reason}`
+    : `Stock Adjustment (${currentDisplayQty} → ${newQuantity} ${unitLabel})`;
+
+  // Create a transaction with stock adjustment
+  // For adjustments: positive difference = stock found more = Credit to account
+  // negative difference = stock found less = Debit from account
+  const adjustmentType = differenceInKg > 0 ? "IN" : "OUT";
+
+  // Create transaction with embedded stock fields
+  await prisma.transaction.create({
+    data: {
+      amount: 0, // No monetary value for pure quantity adjustment
+      type: adjustmentType,
+      description,
+      category: "Stock Adjustment",
+      ledgerType: "PARALLEL",
+      // Use a default account - we need to fetch one
+      accountId: await getDefaultAccountId(userId),
+      userId,
+      // Stock fields
+      stockId,
+      stockMovementType: "ADJUSTMENT",
+      stockQuantity: Math.abs(differenceInKg),
+      stockPricePerKg: Number(stock.avgCostPerKg), // Use current avg cost
+    },
+  });
+
+  // Update stock quantity directly
+  await prisma.stock.update({
+    where: { id: stockId },
+    data: {
+      quantity: newQuantityInKg,
+    },
+  });
+
+  revalidatePath("/stock");
+  revalidatePath(`/stock/${stockId}`);
+  revalidatePath("/transactions");
+  revalidatePath("/");
+
+  return { success: true, differenceInKg };
+}
+
+// Helper to get a default account for stock adjustments
+async function getDefaultAccountId(userId: string): Promise<string> {
+  // Try to find a CASH account first
+  let account = await prisma.account.findFirst({
+    where: { userId, type: "CASH", isDeleted: false, isActive: true },
+  });
+
+  // If no cash account, get any active account
+  if (!account) {
+    account = await prisma.account.findFirst({
+      where: { userId, isDeleted: false, isActive: true },
+    });
+  }
+
+  if (!account) {
+    throw new Error("No active account found. Please create an account first.");
+  }
+
+  return account.id;
+}

@@ -23,6 +23,7 @@ import {
   Building2,
 } from "lucide-react";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
+import { AdjustBalanceButton } from "@/components/adjust-balance-button";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -44,7 +45,16 @@ async function AccountDetailContent({ id }: { id: string }) {
     where: { id, userId, isDeleted: false },
     include: {
       transactionsFrom: {
-        where: { isDeleted: false },
+        where: {
+          isDeleted: false,
+          // Exclude stock-only adjustments (amount = 0 with stock adjustment)
+          NOT: {
+            AND: [
+              { stockMovementType: "ADJUSTMENT" },
+              { amount: 0 },
+            ],
+          },
+        },
         orderBy: { date: "desc" },
         include: {
           party: { select: { name: true } },
@@ -53,7 +63,16 @@ async function AccountDetailContent({ id }: { id: string }) {
         },
       },
       transactionsTo: {
-        where: { isDeleted: false },
+        where: {
+          isDeleted: false,
+          // Exclude stock-only adjustments (amount = 0 with stock adjustment)
+          NOT: {
+            AND: [
+              { stockMovementType: "ADJUSTMENT" },
+              { amount: 0 },
+            ],
+          },
+        },
         orderBy: { date: "desc" },
         include: {
           party: { select: { name: true } },
@@ -133,11 +152,17 @@ async function AccountDetailContent({ id }: { id: string }) {
                 )}
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right space-y-2">
               <p className="text-sm text-gray-500">Current Balance</p>
               <p className={`text-2xl font-bold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
                 {formatINR(balance)}
               </p>
+              <AdjustBalanceButton
+                type="account"
+                id={account.id}
+                name={account.name}
+                currentValue={balance}
+              />
             </div>
           </div>
         </CardContent>

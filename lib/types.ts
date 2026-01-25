@@ -4,6 +4,7 @@ export type AccountType = "CASH" | "BANK" | "LOAN_GIVEN" | "LOAN_TAKEN";
 export type TransactionType = "IN" | "OUT" | "TRANSFER";
 export type PartyType = "CUSTOMER" | "VENDOR" | "LENDER" | "BORROWER";
 export type LedgerType = "OFFICIAL" | "PARALLEL";
+export type PaymentMode = "CASH" | "CREDIT";
 export type CommodityType = "TURMERIC_RAW" | "TURMERIC_POWDER" | "MAIZE" | "OTHER";
 export type StockMovementType = "PURCHASE" | "PROCESSING" | "SALE" | "ADJUSTMENT";
 

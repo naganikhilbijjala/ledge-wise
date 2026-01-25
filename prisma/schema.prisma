@@ -55,6 +55,12 @@ enum LedgerType {
   PARALLEL   // Kept separate
 }
 
+// Payment mode - affects party balance calculation
+enum PaymentMode {
+  CASH    // Paid immediately - no party balance impact
+  CREDIT  // On credit - affects party outstanding balance
+}
+
 // ============================================
 // USERS - Authentication
 // ============================================
@@ -149,6 +155,7 @@ model Transaction {
   description String?
   category    String?         // e.g., "Turmeric Purchase", "Loan Repayment", "Transport"
   ledgerType  LedgerType      @default(PARALLEL)
+  paymentMode PaymentMode     @default(CASH)  // CASH = settled, CREDIT = affects party balance
 
   // Owner (optional during migration, will be required after data migration)
   userId String?

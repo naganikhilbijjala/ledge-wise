@@ -179,3 +179,80 @@ export async function getPartiesForUser() {
     totalDue: Number(party.totalDue),
   }));
 }
+
+interface AdjustPartyBalanceInput {
+  partyId: string;
+  newBalance: number; // Positive = they owe us, Negative = we owe them
+  reason?: string;
+}
+
+export async function adjustPartyBalance(input: AdjustPartyBalanceInput) {
+  const userId = await requireAuth();
+  const { partyId, newBalance, reason } = input;
+
+  // Verify ownership
+  const party = await prisma.party.findFirst({
+    where: { id: partyId, userId, isDeleted: false },
+    include: {
+      transactions: {
+        where: { isDeleted: false, paymentMode: "CREDIT" },
+        select: { amount: true, type: true },
+      },
+    },
+  });
+
+  if (!party) {
+    throw new Error("Party not found");
+  }
+
+  // Calculate current balance from CREDIT transactions
+  let currentBalance = 0;
+  for (const tx of party.transactions) {
+    const amount = Number(tx.amount);
+    // OUT (we paid them) = they owe us more → positive
+    // IN (we received from them) = we owe them more → negative
+    currentBalance += tx.type === "OUT" ? amount : -amount;
+  }
+
+  const difference = newBalance - currentBalance;
+  if (difference === 0) {
+    return { success: true, message: "No adjustment needed" };
+  }
+
+  // Get the first active account for the adjustment transaction
+  const account = await prisma.account.findFirst({
+    where: { userId, isActive: true, isDeleted: false },
+    orderBy: { type: "asc" }, // Prefer CASH account
+  });
+
+  if (!account) {
+    throw new Error("No active account found for adjustment");
+  }
+
+  // Create adjustment transaction as CREDIT so it affects party balance
+  // If difference is positive (they owe us more) → OUT transaction
+  // If difference is negative (we owe them more) → IN transaction
+  const transactionType = difference > 0 ? "OUT" : "IN";
+  const adjustmentAmount = Math.abs(difference);
+
+  await prisma.transaction.create({
+    data: {
+      amount: adjustmentAmount,
+      type: transactionType,
+      description: reason || "Balance adjustment",
+      category: "ADJUSTMENT",
+      ledgerType: "PARALLEL",
+      paymentMode: "CREDIT",
+      date: new Date(),
+      accountId: account.id,
+      partyId: partyId,
+      userId,
+    },
+  });
+
+  revalidatePath("/parties");
+  revalidatePath(`/parties/${partyId}`);
+  revalidatePath("/");
+
+  return { success: true };
+}
