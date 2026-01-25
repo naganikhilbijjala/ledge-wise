@@ -93,49 +93,54 @@ async function StockContent() {
           const displayUnit = isQuintal ? "Quintals" : "KG";
 
           return (
-            <Card key={stock.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900 text-lg">
-                    {stock.name}
-                  </h3>
-                  <Link href={`/stock/${stock.id}/edit`}>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      <Pencil className="h-3 w-3 text-gray-500" />
-                    </Button>
-                  </Link>
-                </div>
-                {stock.location && (
-                  <p className="text-xs text-gray-500 mb-3">{stock.location}</p>
-                )}
+            <Link key={stock.id} href={`/stock/${stock.id}`}>
+              <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900 text-lg">
+                      {stock.name}
+                    </h3>
+                    <Link
+                      href={`/stock/${stock.id}/edit`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <Pencil className="h-3 w-3 text-gray-500" />
+                      </Button>
+                    </Link>
+                  </div>
+                  {stock.location && (
+                    <p className="text-xs text-gray-500 mb-3">{stock.location}</p>
+                  )}
 
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Quantity</p>
-                    <p className="text-xl font-bold text-gray-900">
-                      {formatIndianNumber(displayQty)}{" "}
-                      <span className="text-sm font-normal">{displayUnit}</span>
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Quantity</p>
+                      <p className="text-xl font-bold text-gray-900">
+                        {formatIndianNumber(displayQty)}{" "}
+                        <span className="text-sm font-normal">{displayUnit}</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Avg Cost</p>
+                      <p className="text-xl font-bold text-gray-900">
+                        {formatINR(displayCost)}
+                        <span className="text-sm font-normal text-gray-500">
+                          /{displayUnit}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <p className="text-sm text-gray-500">Total Value</p>
+                    <p className="text-xl font-bold text-amber-600">
+                      {formatINR(value)}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Avg Cost</p>
-                    <p className="text-xl font-bold text-gray-900">
-                      {formatINR(displayCost)}
-                      <span className="text-sm font-normal text-gray-500">
-                        /{displayUnit}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <p className="text-sm text-gray-500">Total Value</p>
-                  <p className="text-xl font-bold text-amber-600">
-                    {formatINR(value)}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </Link>
           );
         })}
 

@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/app-layout";
@@ -135,48 +135,53 @@ async function AccountsContent() {
         {accounts.map((account) => {
           const balance = toNumber(account.currentBalance);
           return (
-            <Card key={account.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-3 rounded-lg ${getIconBg(account.type)}`}>
-                      {getIcon(account.type)}
+            <Link key={account.id} href={`/accounts/${account.id}`}>
+              <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-3 rounded-lg ${getIconBg(account.type)}`}>
+                        {getIcon(account.type)}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          {account.name}
+                        </h3>
+                        <Badge
+                          className={getAccountTypeColor(account.type)}
+                          variant="secondary"
+                        >
+                          {getAccountTypeLabel(account.type)}
+                        </Badge>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">
-                        {account.name}
-                      </h3>
-                      <Badge
-                        className={getAccountTypeColor(account.type)}
-                        variant="secondary"
-                      >
-                        {getAccountTypeLabel(account.type)}
-                      </Badge>
-                    </div>
+                    <Link
+                      href={`/accounts/${account.id}/edit`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Pencil className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    </Link>
                   </div>
-                  <Link href={`/accounts/${account.id}/edit`}>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <Pencil className="h-4 w-4 text-gray-500" />
-                    </Button>
-                  </Link>
-                </div>
-                <div className="mt-4">
-                  <p className="text-sm text-gray-500">Current Balance</p>
-                  <p
-                    className={`text-2xl font-bold ${
-                      balance >= 0 ? "text-gray-900" : "text-red-600"
-                    }`}
-                  >
-                    {formatINR(balance)}
-                  </p>
-                </div>
-                {account.description && (
-                  <p className="mt-2 text-sm text-gray-500">
-                    {account.description}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-500">Current Balance</p>
+                    <p
+                      className={`text-2xl font-bold ${
+                        balance >= 0 ? "text-gray-900" : "text-red-600"
+                      }`}
+                    >
+                      {formatINR(balance)}
+                    </p>
+                  </div>
+                  {account.description && (
+                    <p className="mt-2 text-sm text-gray-500">
+                      {account.description}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </Link>
           );
         })}
 
