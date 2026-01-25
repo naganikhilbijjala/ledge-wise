@@ -11,13 +11,16 @@ import {
   formatINR,
   formatDate,
   toNumber,
-  getAmountColor,
+  getAccountTypeColor,
 } from "@/lib/utils";
 import {
   ArrowLeft,
-  Phone,
-  MapPin,
+  ArrowDownRight,
+  ArrowUpRight,
+  ArrowLeftRight,
   Pencil,
+  Wallet,
+  Building2,
 } from "lucide-react";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
 
@@ -34,114 +37,114 @@ function LoadingSkeleton() {
   );
 }
 
-async function PartyLedgerContent({ id }: { id: string }) {
+async function AccountDetailContent({ id }: { id: string }) {
   const userId = await requireAuth();
 
-  const party = await prisma.party.findFirst({
+  const account = await prisma.account.findFirst({
     where: { id, userId, isDeleted: false },
     include: {
-      transactions: {
+      transactionsFrom: {
         where: { isDeleted: false },
         orderBy: { date: "desc" },
         include: {
-          account: {
-            select: { name: true },
-          },
+          party: { select: { name: true } },
+          toAccount: { select: { name: true } },
+        },
+      },
+      transactionsTo: {
+        where: { isDeleted: false },
+        orderBy: { date: "desc" },
+        include: {
+          party: { select: { name: true } },
+          account: { select: { name: true } },
         },
       },
     },
   });
 
-  if (!party) {
+  if (!account) {
     notFound();
   }
 
-  const partyTypeColors: Record<string, string> = {
-    CUSTOMER: "bg-blue-100 text-blue-800",
-    VENDOR: "bg-purple-100 text-purple-800",
-    LENDER: "bg-amber-100 text-amber-800",
-    BORROWER: "bg-green-100 text-green-800",
+  // Combine and sort all transactions
+  const allTransactions = [
+    ...account.transactionsFrom.map((tx) => ({ ...tx, isFromAccount: true })),
+    ...account.transactionsTo.map((tx) => ({ ...tx, isFromAccount: false })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const balance = toNumber(account.currentBalance);
+
+  const accountTypeIcons: Record<string, React.ReactNode> = {
+    CASH: <Wallet className="h-6 w-6 text-green-600" />,
+    BANK: <Building2 className="h-6 w-6 text-blue-600" />,
+    LOAN_GIVEN: <ArrowUpRight className="h-6 w-6 text-amber-600" />,
+    LOAN_TAKEN: <ArrowDownRight className="h-6 w-6 text-red-600" />,
   };
 
-  const partyTypeLabels: Record<string, string> = {
-    CUSTOMER: "Seller",
-    VENDOR: "Buyer",
-    LENDER: "Lender",
-    BORROWER: "Borrower",
-  };
-
-  // Calculate running balance for ledger view from transactions
-  // Credit (IN) = increases what they owe us (positive)
-  // Debit (OUT) = increases what we owe them (negative)
+  // Calculate running balance (from oldest to newest, then reverse)
   let runningBalance = 0;
-  const transactionsWithBalance = [...party.transactions]
+  const transactionsWithBalance = [...allTransactions]
     .reverse()
     .map((tx) => {
       const amount = toNumber(tx.amount);
-      const balanceChange = tx.type === "IN" ? amount : -amount;
+      let balanceChange = 0;
+
+      if (tx.isFromAccount) {
+        // This account is the source
+        if (tx.type === "IN") {
+          balanceChange = amount; // Credit to this account
+        } else if (tx.type === "OUT") {
+          balanceChange = -amount; // Debit from this account
+        } else if (tx.type === "TRANSFER") {
+          balanceChange = -amount; // Transfer out from this account
+        }
+      } else {
+        // This account is the destination (only for transfers)
+        balanceChange = amount; // Transfer in to this account
+      }
+
       runningBalance += balanceChange;
-      return { ...tx, runningBalance };
+      return { ...tx, runningBalance, balanceChange };
     })
     .reverse();
 
-  // The final running balance IS the current due (calculated, not stored)
-  const due = runningBalance;
-
   return (
     <div className="space-y-6">
-      {/* Party Info Card */}
+      {/* Account Info Card */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
-                <span className="text-2xl font-bold text-amber-600">
-                  {party.name.charAt(0).toUpperCase()}
-                </span>
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                {accountTypeIcons[account.type]}
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">{party.name}</h2>
+                <h2 className="text-xl font-bold text-gray-900">{account.name}</h2>
                 <Badge
-                  className={partyTypeColors[party.type]}
+                  className={getAccountTypeColor(account.type)}
                   variant="secondary"
                 >
-                  {partyTypeLabels[party.type]}
+                  {account.type.replace("_", " ")}
                 </Badge>
-                {party.phone && (
-                  <div className="flex items-center gap-1 mt-2 text-sm text-gray-500">
-                    <Phone className="h-3 w-3" />
-                    {party.phone}
-                  </div>
-                )}
-                {party.address && (
-                  <div className="flex items-center gap-1 text-sm text-gray-500">
-                    <MapPin className="h-3 w-3" />
-                    {party.address}
-                  </div>
+                {account.description && (
+                  <p className="mt-2 text-sm text-gray-500">{account.description}</p>
                 )}
               </div>
             </div>
             <div className="text-right">
-              <p className="text-sm text-gray-500">
-                {due >= 0 ? "They Owe Us" : "We Owe Them"}
-              </p>
-              <p className={`text-2xl font-bold ${getAmountColor(due)}`}>
-                {formatINR(Math.abs(due))}
+              <p className="text-sm text-gray-500">Current Balance</p>
+              <p className={`text-2xl font-bold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                {formatINR(balance)}
               </p>
             </div>
           </div>
-          {party.notes && (
-            <p className="mt-4 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-              {party.notes}
-            </p>
-          )}
         </CardContent>
       </Card>
 
-      {/* Ledger / Transaction History */}
+      {/* Transaction History */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Transaction History (Khata)</CardTitle>
+          <CardTitle className="text-lg">Transaction History</CardTitle>
         </CardHeader>
         <CardContent>
           {transactionsWithBalance.length === 0 ? (
@@ -176,6 +179,9 @@ async function PartyLedgerContent({ id }: { id: string }) {
                 <tbody>
                   {transactionsWithBalance.map((tx) => {
                     const amount = toNumber(tx.amount);
+                    const isCredit = tx.balanceChange > 0;
+                    const isDebit = tx.balanceChange < 0;
+
                     return (
                       <tr
                         key={tx.id}
@@ -185,42 +191,66 @@ async function PartyLedgerContent({ id }: { id: string }) {
                           {formatDate(tx.date)}
                         </td>
                         <td className="py-3 px-2">
-                          <div>
-                            <p className="text-gray-900">
-                              {tx.description || tx.category || "Transaction"}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              via {tx.account.name}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`p-1 rounded-full ${
+                                tx.type === "IN"
+                                  ? "bg-green-100"
+                                  : tx.type === "TRANSFER"
+                                  ? "bg-blue-100"
+                                  : "bg-red-100"
+                              }`}
+                            >
+                              {tx.type === "IN" ? (
+                                <ArrowDownRight className="h-3 w-3 text-green-600" />
+                              ) : tx.type === "TRANSFER" ? (
+                                <ArrowLeftRight className="h-3 w-3 text-blue-600" />
+                              ) : (
+                                <ArrowUpRight className="h-3 w-3 text-red-600" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-gray-900">
+                                {tx.description || tx.category || (tx.type === "TRANSFER" ? "Transfer" : "Transaction")}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {tx.type === "TRANSFER" ? (
+                                  tx.isFromAccount ? (
+                                    <>To: {tx.toAccount?.name}</>
+                                  ) : (
+                                    <>From: {tx.account?.name}</>
+                                  )
+                                ) : tx.party ? (
+                                  tx.party.name
+                                ) : null}
+                              </p>
+                            </div>
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right">
-                          {tx.type === "OUT" ? (
+                          {isCredit ? (
                             <span className="text-green-600 font-medium">
-                              {formatINR(amount)}
+                              {formatINR(Math.abs(tx.balanceChange))}
                             </span>
                           ) : (
                             "-"
                           )}
                         </td>
                         <td className="py-3 px-2 text-right">
-                          {tx.type === "IN" ? (
+                          {isDebit ? (
                             <span className="text-red-600 font-medium">
-                              {formatINR(amount)}
+                              {formatINR(Math.abs(tx.balanceChange))}
                             </span>
                           ) : (
                             "-"
                           )}
                         </td>
                         <td
-                          className={`py-3 px-2 text-right font-semibold ${getAmountColor(
-                            tx.runningBalance
-                          )}`}
+                          className={`py-3 px-2 text-right font-semibold ${
+                            tx.runningBalance >= 0 ? "text-green-600" : "text-red-600"
+                          }`}
                         >
                           {formatINR(Math.abs(tx.runningBalance))}
-                          <span className="text-xs ml-1">
-                            {tx.runningBalance >= 0 ? "Dr" : "Cr"}
-                          </span>
                         </td>
                         <td className="py-3 px-2">
                           <div className="flex items-center justify-center gap-1">
@@ -248,7 +278,7 @@ async function PartyLedgerContent({ id }: { id: string }) {
   );
 }
 
-export default async function PartyLedgerPage({ params }: Props) {
+export default async function AccountDetailPage({ params }: Props) {
   const { id } = await params;
 
   return (
@@ -256,26 +286,26 @@ export default async function PartyLedgerPage({ params }: Props) {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/parties">
+            <Link href="/accounts">
               <Button variant="ghost" size="icon">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Party Ledger</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Account Ledger</h1>
               <p className="text-gray-500 text-sm">View transaction history</p>
             </div>
           </div>
-          <Link href={`/parties/${id}/edit`}>
+          <Link href={`/accounts/${id}/edit`}>
             <Button variant="outline" size="sm">
               <Pencil className="h-4 w-4 mr-2" />
-              Edit Party
+              Edit Account
             </Button>
           </Link>
         </div>
 
         <Suspense fallback={<LoadingSkeleton />}>
-          <PartyLedgerContent id={id} />
+          <AccountDetailContent id={id} />
         </Suspense>
       </div>
     </AppLayout>

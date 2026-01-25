@@ -8,22 +8,40 @@ type CommodityType = "TURMERIC_RAW" | "TURMERIC_POWDER" | "MAIZE" | "OTHER";
 
 interface CreateStockInput {
   name: string;
-  quantity?: number;
+  quantity?: number; // Quantity in the selected unit
   unit?: string;
-  avgCostPerKg?: number;
+  avgCostPerUnit?: number; // Cost per unit in the selected unit
   location?: string;
 }
 
 export async function createStock(input: CreateStockInput) {
   const userId = await requireAuth();
 
+  const unit = input.unit || "KG";
+  const quantity = input.quantity || 0;
+  const costPerUnit = input.avgCostPerUnit || 0;
+
+  // Convert quantity and cost to KG for storage
+  // Internally everything is stored in KG
+  let quantityInKg = quantity;
+  let costPerKg = costPerUnit;
+
+  if (unit === "QUINTAL") {
+    quantityInKg = quantity * 100; // 1 Quintal = 100 KG
+    costPerKg = costPerUnit / 100; // Cost per KG = Cost per Quintal / 100
+  } else if (unit === "TON") {
+    quantityInKg = quantity * 1000; // 1 Ton = 1000 KG
+    costPerKg = costPerUnit / 1000; // Cost per KG = Cost per Ton / 1000
+  }
+  // For KG and BAGS, store as-is (BAGS assumes 1 bag = 1 KG for simplicity)
+
   const stock = await prisma.stock.create({
     data: {
       name: input.name,
       commodityType: "OTHER" as CommodityType, // Default, not used for display
-      quantity: input.quantity || 0,
-      unit: input.unit || "KG",
-      avgCostPerKg: input.avgCostPerKg || 0,
+      quantity: quantityInKg,
+      unit: unit,
+      avgCostPerKg: costPerKg,
       location: input.location || null,
       userId,
     },

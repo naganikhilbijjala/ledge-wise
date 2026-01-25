@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { createTransaction, updateTransaction } from "@/lib/transaction-actions";
 import { createParty } from "@/lib/party-actions";
-import { ArrowDownLeft, ArrowUpRight, Check, Loader2, Plus, X, Package } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Check, Loader2, Plus, X, Package } from "lucide-react";
 import type { LedgerType, TransactionType, PartyType } from "@/lib/types";
 import { cn, formatINR } from "@/lib/utils";
 
@@ -35,6 +35,15 @@ interface Stock {
   name: string;
 }
 
+interface StockMovementData {
+  id: string;
+  stockId: string;
+  quantity: number;
+  pricePerKg: number;
+  type: string | null;
+  stock: { id: string; name: string; unit: string } | null;
+}
+
 interface TransactionData {
   id: string;
   accountId: string;
@@ -44,6 +53,7 @@ interface TransactionData {
   description: string | null;
   category: string | null;
   ledgerType: LedgerType;
+  stockMovement?: StockMovementData | null;
 }
 
 interface Props {
@@ -70,20 +80,33 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
     phone: "",
   });
 
-  // Stock purchase state
-  const [isStockPurchase, setIsStockPurchase] = useState(false);
+  // Stock purchase state - initialize from editTransaction if available
+  const hasStockMovement = !!editTransaction?.stockMovement;
+  const stockUnit = editTransaction?.stockMovement?.stock?.unit || "QUINTAL";
+  const isQuintalUnit = stockUnit === "QUINTAL" || stockUnit === "Quintals";
+
+  // Convert stored KG values to display unit for edit mode
+  const initialStockQty = hasStockMovement
+    ? (isQuintalUnit ? editTransaction.stockMovement!.quantity / 100 : editTransaction.stockMovement!.quantity).toString()
+    : "";
+  const initialStockPrice = hasStockMovement
+    ? (isQuintalUnit ? editTransaction.stockMovement!.pricePerKg * 100 : editTransaction.stockMovement!.pricePerKg).toString()
+    : "";
+
+  const [isStockPurchase, setIsStockPurchase] = useState(hasStockMovement);
   const [stockData, setStockData] = useState({
-    stockId: "",
-    quantity: "",
-    quantityUnit: "QUINTAL" as "KG" | "QUINTAL",
-    pricePerUnit: "",
+    stockId: editTransaction?.stockMovement?.stockId || "",
+    quantity: initialStockQty,
+    quantityUnit: (isQuintalUnit ? "QUINTAL" : "KG") as "KG" | "QUINTAL",
+    pricePerUnit: initialStockPrice,
     includeTax: false,
   });
 
   const [formData, setFormData] = useState({
     accountId: editTransaction?.accountId || accounts[0]?.id || "",
+    toAccountId: "",
     amount: editTransaction?.amount?.toString() || "",
-    type: (editTransaction?.type || "OUT") as "IN" | "OUT",
+    type: (editTransaction?.type || "OUT") as "IN" | "OUT" | "TRANSFER",
     partyId: editTransaction?.partyId || "",
     description: editTransaction?.description || "",
     category: editTransaction?.category || "",
@@ -142,6 +165,11 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
       return;
     }
 
+    // For transfers, require a destination account
+    if (formData.type === "TRANSFER" && !formData.toAccountId) {
+      return;
+    }
+
     startTransition(async () => {
       try {
         if (isEditMode && editTransaction) {
@@ -158,11 +186,12 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
 
           setSuccess(true);
           setTimeout(() => {
-            router.push("/transactions");
+            router.back();
           }, 1500);
         } else {
           await createTransaction({
             accountId: formData.accountId,
+            toAccountId: formData.type === "TRANSFER" ? formData.toAccountId : undefined,
             amount: parseFloat(formData.amount),
             type: formData.type,
             partyId: formData.partyId || undefined,
@@ -184,6 +213,7 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
               ...prev,
               amount: "",
               description: "",
+              toAccountId: "",
             }));
             // Reset stock data too
             setIsStockPurchase(false);
@@ -248,10 +278,10 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Transaction Type Toggle */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
-              onClick={() => setFormData((p) => ({ ...p, type: "IN" }))}
+              onClick={() => setFormData((p) => ({ ...p, type: "IN", toAccountId: "" }))}
               className={cn(
                 "flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors",
                 formData.type === "IN"
@@ -260,11 +290,11 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
               )}
             >
               <ArrowDownLeft size={20} />
-              Money In
+              Credit
             </button>
             <button
               type="button"
-              onClick={() => setFormData((p) => ({ ...p, type: "OUT" }))}
+              onClick={() => setFormData((p) => ({ ...p, type: "OUT", toAccountId: "" }))}
               className={cn(
                 "flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors",
                 formData.type === "OUT"
@@ -273,13 +303,26 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
               )}
             >
               <ArrowUpRight size={20} />
-              Money Out
+              Debit
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData((p) => ({ ...p, type: "TRANSFER", partyId: "" }))}
+              className={cn(
+                "flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors",
+                formData.type === "TRANSFER"
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              )}
+            >
+              <ArrowLeftRight size={20} />
+              Transfer
             </button>
           </div>
 
           {/* Account Selection */}
           <div className="space-y-2">
-            <Label htmlFor="account">Account *</Label>
+            <Label htmlFor="account">{formData.type === "TRANSFER" ? "From Account *" : "Account *"}</Label>
             <Select
               id="account"
               value={formData.accountId}
@@ -296,6 +339,30 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
               ))}
             </Select>
           </div>
+
+          {/* To Account Selection - Only for Transfers */}
+          {formData.type === "TRANSFER" && (
+            <div className="space-y-2">
+              <Label htmlFor="toAccount">To Account *</Label>
+              <Select
+                id="toAccount"
+                value={formData.toAccountId}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, toAccountId: e.target.value }))
+                }
+                required
+              >
+                <option value="">Select destination account</option>
+                {accounts
+                  .filter((account) => account.id !== formData.accountId)
+                  .map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name} ({account.type})
+                    </option>
+                  ))}
+              </Select>
+            </div>
+          )}
 
           {/* Amount */}
           <div className="space-y-2">
@@ -316,142 +383,183 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             />
           </div>
 
-          {/* Stock Purchase Toggle - Only show for Money Out and if stocks exist */}
-          {formData.type === "OUT" && stocks.length > 0 && (
+          {/* Stock Transaction Toggle - Show for both Credit (sale) and Debit (purchase) */}
+          {(formData.type === "OUT" || formData.type === "IN") && (stocks.length > 0 || hasStockMovement) && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isStockPurchase"
-                  checked={isStockPurchase}
-                  onChange={(e) => {
-                    setIsStockPurchase(e.target.checked);
-                    if (!e.target.checked) {
-                      setStockData({
-                        stockId: "",
-                        quantity: "",
-                        quantityUnit: "QUINTAL",
-                        pricePerUnit: "",
-                        includeTax: false,
-                      });
-                    }
-                  }}
-                  className="h-4 w-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
-                />
-                <Label htmlFor="isStockPurchase" className="flex items-center gap-2 cursor-pointer">
-                  <Package size={16} className="text-amber-600" />
-                  This is a stock purchase
-                </Label>
-              </div>
-
-              {isStockPurchase && (
-                <div className="space-y-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                  {/* Stock Selection */}
-                  <div className="space-y-1">
-                    <Label htmlFor="stock" className="text-sm">Select Stock *</Label>
-                    <Select
-                      id="stock"
-                      value={stockData.stockId}
-                      onChange={(e) => handleStockDataChange({ stockId: e.target.value })}
-                      required={isStockPurchase}
-                    >
-                      <option value="">Select stock item</option>
-                      {stocks.map((stock) => (
-                        <option key={stock.id} value={stock.id}>
-                          {stock.name}
-                        </option>
-                      ))}
-                    </Select>
+              {/* In edit mode with stock, show as info; in create mode, show toggle */}
+              {isEditMode && hasStockMovement ? (
+                <div className={`space-y-3 p-3 rounded-lg border ${formData.type === "OUT" ? "bg-amber-50 border-amber-200" : "bg-green-50 border-green-200"}`}>
+                  <div className="flex items-center gap-2">
+                    <Package size={16} className="text-amber-600" />
+                    <span className="text-sm font-medium">
+                      Stock {editTransaction?.stockMovement?.type === "PURCHASE" ? "Purchase" : "Sale"}
+                    </span>
+                    <span className="text-xs text-gray-500">(Read-only)</span>
                   </div>
-
-                  {/* Quantity and Unit */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="quantity" className="text-sm">Quantity *</Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        placeholder="0"
-                        value={stockData.quantity}
-                        onChange={(e) => handleStockDataChange({ quantity: e.target.value })}
-                        min="0"
-                        step="0.01"
-                        required={isStockPurchase}
-                      />
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-500">Stock Item</p>
+                      <p className="font-medium">{editTransaction?.stockMovement?.stock?.name || "Unknown"}</p>
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="quantityUnit" className="text-sm">Unit</Label>
-                      <Select
-                        id="quantityUnit"
-                        value={stockData.quantityUnit}
-                        onChange={(e) => handleStockDataChange({ quantityUnit: e.target.value as "KG" | "QUINTAL" })}
-                      >
-                        <option value="QUINTAL">Quintals</option>
-                        <option value="KG">KG</option>
-                      </Select>
+                    <div>
+                      <p className="text-gray-500">Quantity</p>
+                      <p className="font-medium">
+                        {stockData.quantity} {stockData.quantityUnit === "QUINTAL" ? "Quintals" : "KG"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Rate</p>
+                      <p className="font-medium">
+                        {formatINR(parseFloat(stockData.pricePerUnit) || 0)}/{stockData.quantityUnit === "QUINTAL" ? "Quintal" : "KG"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Total</p>
+                      <p className="font-medium">{formatINR(calculateStockAmount())}</p>
                     </div>
                   </div>
-
-                  {/* Price per Unit */}
-                  <div className="space-y-1">
-                    <Label htmlFor="pricePerUnit" className="text-sm">
-                      Price per {stockData.quantityUnit === "QUINTAL" ? "Quintal" : "KG"} (₹) *
-                    </Label>
-                    <Input
-                      id="pricePerUnit"
-                      type="number"
-                      placeholder="0"
-                      value={stockData.pricePerUnit}
-                      onChange={(e) => handleStockDataChange({ pricePerUnit: e.target.value })}
-                      min="0"
-                      step="0.01"
-                      required={isStockPurchase}
-                    />
-                  </div>
-
-                  {/* Tax checkbox - only show for non-farmer (trader) purchases */}
-                  {isTraderPurchase && (
-                    <div className="flex items-center gap-2 pt-2 border-t border-amber-200">
-                      <input
-                        type="checkbox"
-                        id="includeTax"
-                        checked={stockData.includeTax}
-                        onChange={(e) => handleStockDataChange({ includeTax: e.target.checked })}
-                        className="h-4 w-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
-                      />
-                      <Label htmlFor="includeTax" className="text-sm cursor-pointer">
-                        Include 5% tax (buying from trader)
-                      </Label>
-                    </div>
-                  )}
-
-                  {/* Amount Summary */}
-                  {calculateStockAmount() > 0 && (
-                    <div className="pt-2 border-t border-amber-200 space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Base Amount:</span>
-                        <span className="font-medium">{formatINR(calculateStockAmount())}</span>
-                      </div>
-                      {stockData.includeTax && calculateTaxAmount() > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Tax (5%):</span>
-                          <span className="font-medium text-amber-600">{formatINR(calculateTaxAmount())}</span>
-                        </div>
-                      )}
-                      {stockData.includeTax && calculateTaxAmount() > 0 && (
-                        <div className="flex justify-between text-sm font-bold">
-                          <span>Total:</span>
-                          <span className="text-red-600">{formatINR(totalAmount)}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <p className="text-xs text-gray-500 pt-2 border-t">
+                    To modify stock details, delete this transaction and create a new one.
+                  </p>
                 </div>
+              ) : !isEditMode && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isStockTransaction"
+                      checked={isStockPurchase}
+                      onChange={(e) => {
+                        setIsStockPurchase(e.target.checked);
+                        if (!e.target.checked) {
+                          setStockData({
+                            stockId: "",
+                            quantity: "",
+                            quantityUnit: "QUINTAL",
+                            pricePerUnit: "",
+                            includeTax: false,
+                          });
+                        }
+                      }}
+                      className="h-4 w-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+                    />
+                    <Label htmlFor="isStockTransaction" className="flex items-center gap-2 cursor-pointer">
+                      <Package size={16} className="text-amber-600" />
+                      {formData.type === "OUT" ? "This is a stock purchase" : "This is a stock sale"}
+                    </Label>
+                  </div>
+
+                  {isStockPurchase && (
+                    <div className={`space-y-3 p-3 rounded-lg border ${formData.type === "OUT" ? "bg-amber-50 border-amber-200" : "bg-green-50 border-green-200"}`}>
+                      {/* Stock Selection */}
+                      <div className="space-y-1">
+                        <Label htmlFor="stock" className="text-sm">Select Stock *</Label>
+                        <Select
+                          id="stock"
+                          value={stockData.stockId}
+                          onChange={(e) => handleStockDataChange({ stockId: e.target.value })}
+                          required={isStockPurchase}
+                        >
+                          <option value="">Select stock item</option>
+                          {stocks.map((stock) => (
+                            <option key={stock.id} value={stock.id}>
+                              {stock.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+
+                      {/* Quantity and Unit */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="quantity" className="text-sm">Quantity *</Label>
+                          <Input
+                            id="quantity"
+                            type="number"
+                            placeholder="0"
+                            value={stockData.quantity}
+                            onChange={(e) => handleStockDataChange({ quantity: e.target.value })}
+                            min="0"
+                            step="0.01"
+                            required={isStockPurchase}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="quantityUnit" className="text-sm">Unit</Label>
+                          <Select
+                            id="quantityUnit"
+                            value={stockData.quantityUnit}
+                            onChange={(e) => handleStockDataChange({ quantityUnit: e.target.value as "KG" | "QUINTAL" })}
+                          >
+                            <option value="QUINTAL">Quintals</option>
+                            <option value="KG">KG</option>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Price per Unit */}
+                      <div className="space-y-1">
+                        <Label htmlFor="pricePerUnit" className="text-sm">
+                          Price per {stockData.quantityUnit === "QUINTAL" ? "Quintal" : "KG"} (₹) *
+                        </Label>
+                        <Input
+                          id="pricePerUnit"
+                          type="number"
+                          placeholder="0"
+                          value={stockData.pricePerUnit}
+                          onChange={(e) => handleStockDataChange({ pricePerUnit: e.target.value })}
+                          min="0"
+                          step="0.01"
+                          required={isStockPurchase}
+                        />
+                      </div>
+
+                      {/* Tax checkbox - only show for purchases from non-farmer (trader) */}
+                      {formData.type === "OUT" && isTraderPurchase && (
+                        <div className="flex items-center gap-2 pt-2 border-t border-amber-200">
+                          <input
+                            type="checkbox"
+                            id="includeTax"
+                            checked={stockData.includeTax}
+                            onChange={(e) => handleStockDataChange({ includeTax: e.target.checked })}
+                            className="h-4 w-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+                          />
+                          <Label htmlFor="includeTax" className="text-sm cursor-pointer">
+                            Include 5% tax (buying from trader)
+                          </Label>
+                        </div>
+                      )}
+
+                      {/* Amount Summary */}
+                      {calculateStockAmount() > 0 && (
+                        <div className={`pt-2 border-t space-y-1 ${formData.type === "OUT" ? "border-amber-200" : "border-green-200"}`}>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Base Amount:</span>
+                            <span className="font-medium">{formatINR(calculateStockAmount())}</span>
+                          </div>
+                          {stockData.includeTax && calculateTaxAmount() > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Tax (5%):</span>
+                              <span className="font-medium text-amber-600">{formatINR(calculateTaxAmount())}</span>
+                            </div>
+                          )}
+                          {stockData.includeTax && calculateTaxAmount() > 0 && (
+                            <div className="flex justify-between text-sm font-bold">
+                              <span>Total:</span>
+                              <span className={formData.type === "OUT" ? "text-red-600" : "text-green-600"}>{formatINR(totalAmount)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
 
-          {/* Party Selection */}
+          {/* Party Selection - Hide for Transfers */}
+          {formData.type !== "TRANSFER" && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="party">Party (Optional)</Label>
@@ -544,6 +652,7 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
               </Select>
             )}
           </div>
+          )}
 
           {/* Category */}
           <div className="space-y-2">
@@ -612,24 +721,33 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             </div>
           </div>
 
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            className="w-full h-12 text-lg"
-            variant={formData.type === "IN" ? "success" : "destructive"}
-            disabled={isPending || !formData.accountId || !formData.amount}
-          >
-            {isPending ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                {isEditMode ? "Updating..." : "Saving..."}
-              </>
-            ) : (
-              <>
-                {isEditMode ? "Update" : "Save"} {formData.type === "IN" ? "Income" : "Expense"}
-              </>
-            )}
-          </Button>
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 h-12 text-lg"
+              onClick={() => router.back()}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1 h-12 text-lg"
+              variant={formData.type === "IN" ? "success" : formData.type === "TRANSFER" ? "warning" : "destructive"}
+              disabled={isPending || !formData.accountId || !formData.amount || (formData.type === "TRANSFER" && !formData.toAccountId)}
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

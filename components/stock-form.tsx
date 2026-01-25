@@ -58,7 +58,7 @@ export function StockForm({ editStock }: Props) {
             name: formData.name,
             quantity: parseFloat(formData.quantity) || 0,
             unit: formData.unit,
-            avgCostPerKg: parseFloat(formData.avgCostPerKg) || 0,
+            avgCostPerUnit: parseFloat(formData.avgCostPerKg) || 0,
             location: formData.location || undefined,
           });
         }
@@ -117,40 +117,6 @@ export function StockForm({ editStock }: Props) {
             </p>
           </div>
 
-          {!isEditMode && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Opening Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  placeholder="0"
-                  value={formData.quantity}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, quantity: e.target.value }))
-                  }
-                  min="0"
-                  step="0.001"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="avgCostPerKg">Average Cost per KG (₹)</Label>
-                <Input
-                  id="avgCostPerKg"
-                  type="number"
-                  placeholder="0"
-                  value={formData.avgCostPerKg}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, avgCostPerKg: e.target.value }))
-                  }
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-            </>
-          )}
-
           <div className="space-y-2">
             <Label htmlFor="unit">Unit</Label>
             <Select
@@ -166,6 +132,44 @@ export function StockForm({ editStock }: Props) {
               <option value="BAGS">Bags</option>
             </Select>
           </div>
+
+          {!isEditMode && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="quantity">
+                  Opening Quantity ({formData.unit === "QUINTAL" ? "Quintals" : formData.unit === "TON" ? "Tons" : formData.unit})
+                </Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  placeholder="0"
+                  value={formData.quantity}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, quantity: e.target.value }))
+                  }
+                  min="0"
+                  step="0.001"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="avgCostPerKg">
+                  Average Cost per {formData.unit === "QUINTAL" ? "Quintal" : formData.unit === "TON" ? "Ton" : formData.unit} (₹)
+                </Label>
+                <Input
+                  id="avgCostPerKg"
+                  type="number"
+                  placeholder="0"
+                  value={formData.avgCostPerKg}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, avgCostPerKg: e.target.value }))
+                  }
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+            </>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="location">Location</Label>

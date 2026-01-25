@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: add postinstall script to generate Prisma client on Vercel\n\nVercel builds were failing because the Prisma client wasn''t being\nregenerated with the updated schema that includes userId fields.\nThe postinstall script ensures prisma generate runs after npm install.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(npm run build:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ]
   }
 }

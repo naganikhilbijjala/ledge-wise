@@ -137,7 +137,7 @@ export async function getRecentTransactions(
   }));
 }
 
-// Get stock summary
+// Get stock summary with quantity in quintals
 export async function getStockSummary(): Promise<StockSummary[]> {
   const userId = await requireAuth();
 
@@ -155,109 +155,136 @@ export async function getStockSummary(): Promise<StockSummary[]> {
   });
 
   return stocks.map((stock) => {
-    const quantity = toNumber(stock.quantity);
-    const avgCost = toNumber(stock.avgCostPerKg);
+    const quantityInKg = toNumber(stock.quantity);
+    const avgCostPerKg = toNumber(stock.avgCostPerKg);
+    // Convert KG to Quintals (1 Quintal = 100 KG)
+    const quantityInQuintals = quantityInKg / 100;
+    const totalValue = quantityInKg * avgCostPerKg;
     return {
       id: stock.id,
       commodityType: stock.commodityType,
       name: stock.name,
-      quantity,
-      unit: stock.unit,
-      avgCostPerKg: avgCost,
-      totalValue: quantity * avgCost,
+      quantity: quantityInQuintals,
+      unit: "Quintals",
+      avgCostPerKg: avgCostPerKg,
+      totalValue: totalValue,
     };
   });
 }
 
-// Get parties who owe money (receivables)
-export async function getReceivables(): Promise<PartySummary[]> {
-  const userId = await requireAuth();
-
+// Calculate party balance from transactions
+// Positive = they owe us (receivable), Negative = we owe them (payable)
+// Credit (IN) with party = increases what they owe us
+// Debit (OUT) with party = increases what we owe them
+async function calculatePartyBalances(userId: string): Promise<Map<string, { id: string; name: string; type: string; balance: number }>> {
   const parties = await prisma.party.findMany({
-    where: {
-      userId,
-      isActive: true,
-      isDeleted: false,
-      totalDue: { gt: 0 },
-    },
-    orderBy: { totalDue: "desc" },
+    where: { userId, isActive: true, isDeleted: false },
     select: {
       id: true,
       name: true,
       type: true,
-      totalDue: true,
+      transactions: {
+        where: { isDeleted: false },
+        select: {
+          amount: true,
+          type: true,
+        },
+      },
     },
   });
 
-  return parties.map((party) => ({
-    id: party.id,
-    name: party.name,
-    type: party.type,
-    totalDue: toNumber(party.totalDue),
-  }));
+  const balanceMap = new Map<string, { id: string; name: string; type: string; balance: number }>();
+
+  for (const party of parties) {
+    let balance = 0;
+    for (const tx of party.transactions) {
+      const amount = toNumber(tx.amount);
+      // Credit (IN) = they owe us more (positive)
+      // Debit (OUT) = we owe them more (negative)
+      balance += tx.type === "IN" ? amount : -amount;
+    }
+    balanceMap.set(party.id, {
+      id: party.id,
+      name: party.name,
+      type: party.type,
+      balance,
+    });
+  }
+
+  return balanceMap;
 }
 
-// Get parties we owe money to (payables)
+// Get parties who owe money (receivables) - calculated from transactions
+export async function getReceivables(): Promise<PartySummary[]> {
+  const userId = await requireAuth();
+  const balances = await calculatePartyBalances(userId);
+
+  const receivables: PartySummary[] = [];
+  for (const party of balances.values()) {
+    if (party.balance > 0) {
+      receivables.push({
+        id: party.id,
+        name: party.name,
+        type: party.type,
+        totalDue: party.balance,
+      });
+    }
+  }
+
+  // Sort by amount descending
+  return receivables.sort((a, b) => b.totalDue - a.totalDue);
+}
+
+// Get parties we owe money to (payables) - calculated from transactions
 export async function getPayables(): Promise<PartySummary[]> {
   const userId = await requireAuth();
+  const balances = await calculatePartyBalances(userId);
 
-  const parties = await prisma.party.findMany({
-    where: {
-      userId,
-      isActive: true,
-      isDeleted: false,
-      totalDue: { lt: 0 },
-    },
-    orderBy: { totalDue: "asc" },
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      totalDue: true,
-    },
-  });
+  const payables: PartySummary[] = [];
+  for (const party of balances.values()) {
+    if (party.balance < 0) {
+      payables.push({
+        id: party.id,
+        name: party.name,
+        type: party.type,
+        totalDue: Math.abs(party.balance),
+      });
+    }
+  }
 
-  return parties.map((party) => ({
-    id: party.id,
-    name: party.name,
-    type: party.type,
-    totalDue: Math.abs(toNumber(party.totalDue)),
-  }));
+  // Sort by amount descending
+  return payables.sort((a, b) => b.totalDue - a.totalDue);
 }
 
 // Get dashboard stats
 export async function getDashboardStats() {
   const [
-    netPosition,
     accounts,
     receivables,
     payables,
-    recentTransactions,
     stockSummary,
   ] = await Promise.all([
-    getNetPosition(),
     getAccounts(),
     getReceivables(),
     getPayables(),
-    getRecentTransactions(5),
     getStockSummary(),
   ]);
 
   const totalReceivables = receivables.reduce((sum, p) => sum + p.totalDue, 0);
   const totalPayables = payables.reduce((sum, p) => sum + p.totalDue, 0);
   const totalStockValue = stockSummary.reduce((sum, s) => sum + s.totalValue, 0);
+  const totalStockQuantity = stockSummary.reduce((sum, s) => sum + s.quantity, 0);
 
   return {
-    netPosition,
     accounts,
     receivables,
     payables,
-    recentTransactions,
     stockSummary,
     totals: {
       totalReceivables,
       totalPayables,
       totalStockValue,
+      totalStockQuantity,
     },
   };
 }

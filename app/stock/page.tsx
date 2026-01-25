@@ -61,7 +61,7 @@ async function StockContent() {
               <span className="text-sm text-green-700">Total Quantity</span>
             </div>
             <p className="text-xl font-bold text-green-800 mt-1">
-              {formatIndianNumber(totals.totalQty)} KG
+              {formatIndianNumber(totals.totalQty / 100)} Quintals
             </p>
           </CardContent>
         </Card>
@@ -81,9 +81,16 @@ async function StockContent() {
       {/* Stock Items Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {stocks.map((stock) => {
-          const qty = toNumber(stock.quantity);
-          const cost = toNumber(stock.avgCostPerKg);
-          const value = qty * cost;
+          const qtyInKg = toNumber(stock.quantity);
+          const costPerKg = toNumber(stock.avgCostPerKg);
+          const value = qtyInKg * costPerKg;
+
+          // Convert quantity and cost for display based on unit preference
+          // Internally everything is stored in KG
+          const isQuintal = stock.unit === "QUINTAL" || stock.unit === "Quintals";
+          const displayQty = isQuintal ? qtyInKg / 100 : qtyInKg;
+          const displayCost = isQuintal ? costPerKg * 100 : costPerKg;
+          const displayUnit = isQuintal ? "Quintals" : "KG";
 
           return (
             <Card key={stock.id} className="hover:shadow-md transition-shadow">
@@ -106,16 +113,16 @@ async function StockContent() {
                   <div>
                     <p className="text-sm text-gray-500">Quantity</p>
                     <p className="text-xl font-bold text-gray-900">
-                      {formatIndianNumber(qty)}{" "}
-                      <span className="text-sm font-normal">{stock.unit}</span>
+                      {formatIndianNumber(displayQty)}{" "}
+                      <span className="text-sm font-normal">{displayUnit}</span>
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Avg Cost</p>
                     <p className="text-xl font-bold text-gray-900">
-                      {formatINR(cost)}
+                      {formatINR(displayCost)}
                       <span className="text-sm font-normal text-gray-500">
-                        /KG
+                        /{displayUnit}
                       </span>
                     </p>
                   </div>
@@ -163,7 +170,7 @@ export default function StockPage() {
                 Add Stock
               </Button>
             </Link>
-            <Link href="/stock/movement">
+            <Link href="/entry">
               <Button variant="warning">
                 <Truck className="h-4 w-4 mr-2" />
                 Add Movement

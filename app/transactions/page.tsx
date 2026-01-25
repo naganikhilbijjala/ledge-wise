@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/app-layout";
 import { formatINR, formatDate, toNumber } from "@/lib/utils";
-import { ArrowDownRight, ArrowUpRight, Plus, IndianRupee, Pencil } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ArrowLeftRight, Plus, IndianRupee, Pencil } from "lucide-react";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
 
 function LoadingSkeleton() {
@@ -29,6 +29,7 @@ async function TransactionsContent() {
     take: 100,
     include: {
       account: { select: { name: true } },
+      toAccount: { select: { name: true } },
       party: { select: { name: true } },
     },
   });
@@ -56,21 +57,29 @@ async function TransactionsContent() {
                   <div className="flex items-center gap-3">
                     <div
                       className={`p-2 rounded-full ${
-                        tx.type === "IN" ? "bg-green-100" : "bg-red-100"
+                        tx.type === "IN" ? "bg-green-100" : tx.type === "TRANSFER" ? "bg-blue-100" : "bg-red-100"
                       }`}
                     >
                       {tx.type === "IN" ? (
                         <ArrowDownRight className="h-5 w-5 text-green-600" />
+                      ) : tx.type === "TRANSFER" ? (
+                        <ArrowLeftRight className="h-5 w-5 text-blue-600" />
                       ) : (
                         <ArrowUpRight className="h-5 w-5 text-red-600" />
                       )}
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">
-                        {tx.description || tx.category || "Transaction"}
+                        {tx.description || tx.category || (tx.type === "TRANSFER" ? "Transfer" : "Transaction")}
                       </p>
                       <div className="flex items-center gap-2 text-sm text-gray-500">
                         <span>{tx.account.name}</span>
+                        {tx.type === "TRANSFER" && tx.toAccount && (
+                          <>
+                            <span>→</span>
+                            <span>{tx.toAccount.name}</span>
+                          </>
+                        )}
                         {tx.party && (
                           <>
                             <span>•</span>
@@ -86,10 +95,10 @@ async function TransactionsContent() {
                     <div className="text-right">
                       <p
                         className={`font-semibold ${
-                          tx.type === "IN" ? "text-green-600" : "text-red-600"
+                          tx.type === "IN" ? "text-green-600" : tx.type === "TRANSFER" ? "text-blue-600" : "text-red-600"
                         }`}
                       >
-                        {tx.type === "IN" ? "+" : "-"}
+                        {tx.type === "IN" ? "+" : tx.type === "TRANSFER" ? "" : "-"}
                         {formatINR(amount)}
                       </p>
                       <Badge

@@ -20,8 +20,9 @@ enum AccountType {
 
 // Transaction direction
 enum TransactionType {
-  IN   // Money coming in
-  OUT  // Money going out
+  IN       // Credit - Money coming in
+  OUT      // Debit - Money going out
+  TRANSFER // Transfer - Money moving between accounts
 }
 
 // Party type
@@ -97,7 +98,8 @@ model Account {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  transactions Transaction[]
+  transactionsFrom Transaction[] @relation("FromAccount")
+  transactionsTo   Transaction[] @relation("ToAccount")
 
   @@index([type])
   @@index([isActive])
@@ -154,12 +156,23 @@ model Transaction {
 
   // References
   accountId String
-  account   Account @relation(fields: [accountId], references: [id])
+  account   Account @relation("FromAccount", fields: [accountId], references: [id])
+
+  // For transfers: destination account
+  toAccountId String?
+  toAccount   Account? @relation("ToAccount", fields: [toAccountId], references: [id])
 
   partyId String?
   party   Party?  @relation(fields: [partyId], references: [id])
 
-  // Link to stock movement if applicable
+  // Stock fields (embedded instead of separate StockMovement table)
+  stockId           String?             // Reference to Stock item
+  stock             Stock?              @relation(fields: [stockId], references: [id])
+  stockMovementType StockMovementType?  // PURCHASE, SALE, PROCESSING, ADJUSTMENT
+  stockQuantity     Decimal?            @db.Decimal(15, 3) // Quantity in KG
+  stockPricePerKg   Decimal?            @db.Decimal(15, 2) // Price per KG
+
+  // Legacy: Link to old stock movement (for migration, will be removed later)
   stockMovementId String?        @unique
   stockMovement   StockMovement? @relation(fields: [stockMovementId], references: [id])
 
@@ -182,6 +195,7 @@ model Transaction {
   @@index([category])
   @@index([userId])
   @@index([isDeleted])
+  @@index([stockId])
 }
 
 // ============================================
@@ -245,6 +259,10 @@ model Stock {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
+  // Stock transactions (replaces movements)
+  transactions Transaction[]
+
+  // Legacy: old movements (for migration, will be removed later)
   movements StockMovement[]
 
   @@unique([commodityType, name, location])
