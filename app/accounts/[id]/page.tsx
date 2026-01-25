@@ -48,6 +48,7 @@ async function AccountDetailContent({ id }: { id: string }) {
         orderBy: { date: "desc" },
         include: {
           party: { select: { name: true } },
+          account: { select: { name: true } },
           toAccount: { select: { name: true } },
         },
       },
@@ -57,6 +58,7 @@ async function AccountDetailContent({ id }: { id: string }) {
         include: {
           party: { select: { name: true } },
           account: { select: { name: true } },
+          toAccount: { select: { name: true } },
         },
       },
     },

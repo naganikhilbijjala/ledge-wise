@@ -9,6 +9,7 @@ import type {
   PartySummary,
   RecentTransaction,
   StockSummary,
+  PartyType,
 } from "@/lib/types";
 
 // Get net position summary for dashboard
@@ -176,7 +177,7 @@ export async function getStockSummary(): Promise<StockSummary[]> {
 // Positive = they owe us (receivable), Negative = we owe them (payable)
 // Credit (IN) with party = increases what they owe us
 // Debit (OUT) with party = increases what we owe them
-async function calculatePartyBalances(userId: string): Promise<Map<string, { id: string; name: string; type: string; balance: number }>> {
+async function calculatePartyBalances(userId: string): Promise<Map<string, { id: string; name: string; type: PartyType; balance: number }>> {
   const parties = await prisma.party.findMany({
     where: { userId, isActive: true, isDeleted: false },
     select: {
@@ -193,7 +194,7 @@ async function calculatePartyBalances(userId: string): Promise<Map<string, { id:
     },
   });
 
-  const balanceMap = new Map<string, { id: string; name: string; type: string; balance: number }>();
+  const balanceMap = new Map<string, { id: string; name: string; type: PartyType; balance: number }>();
 
   for (const party of parties) {
     let balance = 0;
@@ -206,7 +207,7 @@ async function calculatePartyBalances(userId: string): Promise<Map<string, { id:
     balanceMap.set(party.id, {
       id: party.id,
       name: party.name,
-      type: party.type,
+      type: party.type as PartyType,
       balance,
     });
   }
