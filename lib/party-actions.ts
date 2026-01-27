@@ -10,6 +10,8 @@ interface CreatePartyInput {
   type: string;
   phone?: string;
   address?: string;
+  state?: string;
+  gstNumber?: string;
   notes?: string;
 }
 
@@ -22,6 +24,8 @@ export async function createParty(input: CreatePartyInput) {
       type: input.type as PartyType,
       phone: input.phone || null,
       address: input.address || null,
+      state: input.state || null,
+      gstNumber: input.gstNumber || null,
       notes: input.notes || null,
       userId,
     },
@@ -55,6 +59,8 @@ export async function getPartyById(id: string) {
     type: party.type as PartyType,
     phone: party.phone,
     address: party.address,
+    state: party.state,
+    gstNumber: party.gstNumber,
     notes: party.notes,
     totalDue: Number(party.totalDue),
     isActive: party.isActive,
@@ -67,6 +73,8 @@ interface UpdatePartyInput {
   type: string;
   phone?: string;
   address?: string;
+  state?: string;
+  gstNumber?: string;
   notes?: string;
 }
 
@@ -89,6 +97,8 @@ export async function updateParty(input: UpdatePartyInput) {
       type: input.type as PartyType,
       phone: input.phone || null,
       address: input.address || null,
+      state: input.state || null,
+      gstNumber: input.gstNumber || null,
       notes: input.notes || null,
     },
   });
@@ -176,6 +186,8 @@ export async function getPartiesForUser() {
     type: party.type as PartyType,
     phone: party.phone,
     address: party.address,
+    state: party.state,
+    gstNumber: party.gstNumber,
     totalDue: Number(party.totalDue),
   }));
 }
@@ -209,9 +221,9 @@ export async function adjustPartyBalance(input: AdjustPartyBalanceInput) {
   let currentBalance = 0;
   for (const tx of party.transactions) {
     const amount = Number(tx.amount);
-    // OUT (we paid them) = they owe us more → positive
-    // IN (we received from them) = we owe them more → negative
-    currentBalance += tx.type === "OUT" ? amount : -amount;
+    // IN (Credit) = We sold on credit → they owe us more → +amount
+    // OUT (Debit) = We bought on credit → we owe them more → -amount
+    currentBalance += tx.type === "IN" ? amount : -amount;
   }
 
   const difference = newBalance - currentBalance;
@@ -230,9 +242,9 @@ export async function adjustPartyBalance(input: AdjustPartyBalanceInput) {
   }
 
   // Create adjustment transaction as CREDIT so it affects party balance
-  // If difference is positive (they owe us more) → OUT transaction
-  // If difference is negative (we owe them more) → IN transaction
-  const transactionType = difference > 0 ? "OUT" : "IN";
+  // If difference is positive (they owe us more) → need IN transaction (credit sale)
+  // If difference is negative (we owe them more) → need OUT transaction (credit purchase)
+  const transactionType = difference > 0 ? "IN" : "OUT";
   const adjustmentAmount = Math.abs(difference);
 
   await prisma.transaction.create({

@@ -190,10 +190,10 @@ async function AccountDetailContent({ id }: { id: string }) {
                       Description
                     </th>
                     <th className="text-right py-3 px-2 font-medium text-gray-500">
-                      Credit
+                      Debit
                     </th>
                     <th className="text-right py-3 px-2 font-medium text-gray-500">
-                      Debit
+                      Credit
                     </th>
                     <th className="text-right py-3 px-2 font-medium text-gray-500">
                       Balance
@@ -255,6 +255,7 @@ async function AccountDetailContent({ id }: { id: string }) {
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right">
+                          {/* Debit column = balance increase (money in) */}
                           {isCredit ? (
                             <span className="text-green-600 font-medium">
                               {formatINR(Math.abs(tx.balanceChange))}
@@ -264,6 +265,7 @@ async function AccountDetailContent({ id }: { id: string }) {
                           )}
                         </td>
                         <td className="py-3 px-2 text-right">
+                          {/* Credit column = balance decrease (money out) */}
                           {isDebit ? (
                             <span className="text-red-600 font-medium">
                               {formatINR(Math.abs(tx.balanceChange))}

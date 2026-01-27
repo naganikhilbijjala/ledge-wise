@@ -174,9 +174,10 @@ export async function getStockSummary(): Promise<StockSummary[]> {
 }
 
 // Calculate party balance from transactions
-// Positive = they owe us (receivable), Negative = we owe them (payable)
-// Credit (IN) with party = increases what they owe us
-// Debit (OUT) with party = increases what we owe them
+// Positive = they owe us (receivable/debtor), Negative = we owe them (payable/creditor)
+// For CREDIT (Udhar) transactions only:
+// - IN (Credit) = We sold on credit → they owe us more → +amount
+// - OUT (Debit) = We bought on credit → we owe them more → -amount
 async function calculatePartyBalances(userId: string): Promise<Map<string, { id: string; name: string; type: PartyType; balance: number }>> {
   const parties = await prisma.party.findMany({
     where: { userId, isActive: true, isDeleted: false },
@@ -200,15 +201,14 @@ async function calculatePartyBalances(userId: string): Promise<Map<string, { id:
   for (const party of parties) {
     let balance = 0;
     for (const tx of party.transactions) {
-      // Only CREDIT transactions affect party balance
+      // Only CREDIT (Udhar) transactions affect party balance
       // CASH transactions are settled immediately and don't create outstanding balances
       if (tx.paymentMode !== "CREDIT") continue;
 
       const amount = toNumber(tx.amount);
-      // For CREDIT transactions from party's perspective:
-      // OUT (we paid them) = reduces what we owe them → positive balance (they owe us)
-      // IN (we received from them) = increases what we owe them → negative balance (we owe them)
-      balance += tx.type === "OUT" ? amount : -amount;
+      // IN (Credit) = We sold on credit → they owe us more → +amount
+      // OUT (Debit) = We bought on credit → we owe them more → -amount
+      balance += tx.type === "IN" ? amount : -amount;
     }
     balanceMap.set(party.id, {
       id: party.id,

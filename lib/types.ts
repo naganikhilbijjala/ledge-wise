@@ -1,6 +1,6 @@
 // Type definitions for LedgeWise
 
-export type AccountType = "CASH" | "BANK" | "LOAN_GIVEN" | "LOAN_TAKEN";
+export type AccountType = "CASH" | "BANK" | "LOAN_GIVEN" | "LOAN_TAKEN" | "GST_PAYABLE" | "GST_RECEIVABLE";
 export type TransactionType = "IN" | "OUT" | "TRANSFER";
 export type PartyType = "CUSTOMER" | "VENDOR" | "LENDER" | "BORROWER";
 export type LedgerType = "OFFICIAL" | "PARALLEL";

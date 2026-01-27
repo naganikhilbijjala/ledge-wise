@@ -44,9 +44,9 @@ async function PartiesContent() {
     let balance = 0;
     for (const tx of party.transactions) {
       const amount = toNumber(tx.amount);
-      // OUT (we paid them) = they owe us more → positive
-      // IN (we received from them) = we owe them more → negative
-      balance += tx.type === "OUT" ? amount : -amount;
+      // IN (Credit) = We sold on credit → they owe us more → +amount
+      // OUT (Debit) = We bought on credit → we owe them more → -amount
+      balance += tx.type === "IN" ? amount : -amount;
     }
     return { ...party, calculatedBalance: balance };
   });

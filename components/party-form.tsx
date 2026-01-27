@@ -12,12 +12,49 @@ import { Loader2, Trash2 } from "lucide-react";
 import { createParty, updateParty, deleteParty } from "@/lib/party-actions";
 import type { PartyType } from "@/lib/types";
 
+// Indian states for GST calculation
+const INDIAN_STATES = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Delhi",
+  "Jammu and Kashmir",
+  "Ladakh",
+];
+
 interface PartyData {
   id: string;
   name: string;
   type: PartyType;
   phone: string | null;
   address: string | null;
+  state: string | null;
+  gstNumber: string | null;
   notes: string | null;
   totalDue: number;
 }
@@ -38,6 +75,8 @@ export function PartyForm({ editParty }: Props) {
     type: (editParty?.type || "CUSTOMER") as PartyType,
     phone: editParty?.phone || "",
     address: editParty?.address || "",
+    state: editParty?.state || "",
+    gstNumber: editParty?.gstNumber || "",
     notes: editParty?.notes || "",
   });
 
@@ -54,6 +93,8 @@ export function PartyForm({ editParty }: Props) {
             type: formData.type,
             phone: formData.phone || undefined,
             address: formData.address || undefined,
+            state: formData.state || undefined,
+            gstNumber: formData.gstNumber || undefined,
             notes: formData.notes || undefined,
           });
         } else {
@@ -62,6 +103,8 @@ export function PartyForm({ editParty }: Props) {
             type: formData.type,
             phone: formData.phone || undefined,
             address: formData.address || undefined,
+            state: formData.state || undefined,
+            gstNumber: formData.gstNumber || undefined,
             notes: formData.notes || undefined,
           });
         }
@@ -156,6 +199,44 @@ export function PartyForm({ editParty }: Props) {
               onChange={(e) =>
                 setFormData((p) => ({ ...p, address: e.target.value }))
               }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="state">State (for GST)</Label>
+            <Select
+              id="state"
+              value={formData.state}
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, state: e.target.value }))
+              }
+            >
+              <option value="">Select state</option>
+              {INDIAN_STATES.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-gray-500">
+              {formData.state === "Telangana"
+                ? "Same state: CGST + SGST will apply"
+                : formData.state
+                ? "Different state: IGST will apply"
+                : "Select state for automatic GST calculation"}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="gstNumber">GST Number (Optional)</Label>
+            <Input
+              id="gstNumber"
+              placeholder="e.g., 36AABCT1234F1Z5"
+              value={formData.gstNumber}
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, gstNumber: e.target.value.toUpperCase() }))
+              }
+              maxLength={15}
             />
           </div>
 

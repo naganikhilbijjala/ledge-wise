@@ -24,8 +24,12 @@ interface CreateTransactionInput {
   includeTax?: boolean; // 5% tax for trader purchases
 }
 
-// Tax rate for trader (non-farmer) purchases
-const TRADER_TAX_RATE = 0.05; // 5%
+// GST Constants
+const BUSINESS_STATE = "Telangana"; // Our business state
+const GST_RATE = 0.05; // 5% total GST
+const CGST_RATE = 0.025; // 2.5% CGST (intra-state)
+const SGST_RATE = 0.025; // 2.5% SGST (intra-state)
+const IGST_RATE = 0.05; // 5% IGST (inter-state)
 
 export async function createTransaction(input: CreateTransactionInput) {
   const userId = await requireAuth();
@@ -72,8 +76,9 @@ export async function createTransaction(input: CreateTransactionInput) {
     }
   }
 
-  // Verify party ownership and get party type if provided
+  // Verify party ownership and get party type and state if provided
   let partyType: string | null = null;
+  let partyState: string | null = null;
   if (partyId) {
     const party = await prisma.party.findFirst({
       where: { id: partyId, userId, isDeleted: false },
@@ -82,6 +87,7 @@ export async function createTransaction(input: CreateTransactionInput) {
       throw new Error("Party not found");
     }
     partyType = party.type;
+    partyState = party.state;
   }
 
   // Verify stock ownership if provided
@@ -95,30 +101,47 @@ export async function createTransaction(input: CreateTransactionInput) {
     }
   }
 
-  // Calculate final amount with tax if applicable
-  // Tax applies when buying from traders (non-farmers) - party type is not CUSTOMER
+  // Calculate GST based on party's state
   let finalAmount = amount;
-  let taxAmount = 0;
-  const isTraderPurchase = partyType && partyType !== "CUSTOMER" && includeTax;
+  let cgstAmount = 0;
+  let sgstAmount = 0;
+  let igstAmount = 0;
+  let totalGstAmount = 0;
+  const isSameState = partyState === BUSINESS_STATE;
+  const isInterState = partyState && partyState !== BUSINESS_STATE;
 
-  if (isTraderPurchase) {
-    taxAmount = Math.round(amount * TRADER_TAX_RATE * 100) / 100; // Round to 2 decimal places
-    finalAmount = amount + taxAmount;
+  if (includeTax && partyState) {
+    if (isSameState) {
+      // Intra-state: CGST + SGST
+      cgstAmount = Math.round(amount * CGST_RATE * 100) / 100;
+      sgstAmount = Math.round(amount * SGST_RATE * 100) / 100;
+      totalGstAmount = cgstAmount + sgstAmount;
+    } else if (isInterState) {
+      // Inter-state: IGST
+      igstAmount = Math.round(amount * IGST_RATE * 100) / 100;
+      totalGstAmount = igstAmount;
+    }
+    finalAmount = amount + totalGstAmount;
   }
 
-  // Build description with stock and tax info
+  // Build description with stock and GST info
   let finalDescription = description || "";
   if (stockId && quantity && quantityUnit) {
-    const qtyInKg = quantityUnit === "QUINTAL" ? quantity * 100 : quantity;
     const stockInfo = `Stock: ${quantity} ${quantityUnit} @ ₹${pricePerUnit}/${quantityUnit}`;
     finalDescription = finalDescription
       ? `${finalDescription} | ${stockInfo}`
       : stockInfo;
   }
-  if (taxAmount > 0) {
+  if (totalGstAmount > 0) {
+    let gstInfo = "";
+    if (isSameState) {
+      gstInfo = `CGST: ₹${cgstAmount.toFixed(2)} + SGST: ₹${sgstAmount.toFixed(2)}`;
+    } else {
+      gstInfo = `IGST: ₹${igstAmount.toFixed(2)}`;
+    }
     finalDescription = finalDescription
-      ? `${finalDescription} | Tax (5%): ₹${taxAmount.toFixed(2)}`
-      : `Tax (5%): ₹${taxAmount.toFixed(2)}`;
+      ? `${finalDescription} | ${gstInfo}`
+      : gstInfo;
   }
 
   // Handle stock transaction - store directly in Transaction table
@@ -189,9 +212,117 @@ export async function createTransaction(input: CreateTransactionInput) {
     },
   });
 
+  // Post GST to separate accounts if applicable
+  if (totalGstAmount > 0) {
+    // Determine GST account type based on transaction type
+    // Purchase (OUT) = Input GST (GST_RECEIVABLE - we can claim it)
+    // Sale (IN) = Output GST (GST_PAYABLE - we need to pay it)
+    const gstAccountType = type === "OUT" ? "GST_RECEIVABLE" : "GST_PAYABLE";
+
+    // Find or create GST accounts
+    const findOrCreateGstAccount = async (name: string, accountType: string) => {
+      let gstAccount = await prisma.account.findFirst({
+        where: { userId, name, type: accountType as "GST_PAYABLE" | "GST_RECEIVABLE", isDeleted: false },
+      });
+      if (!gstAccount) {
+        gstAccount = await prisma.account.create({
+          data: {
+            name,
+            type: accountType as "GST_PAYABLE" | "GST_RECEIVABLE",
+            currentBalance: 0,
+            userId,
+          },
+        });
+      }
+      return gstAccount;
+    };
+
+    const transactionDate = date || new Date();
+
+    if (isSameState && cgstAmount > 0) {
+      // Post CGST
+      const cgstAccount = await findOrCreateGstAccount(
+        type === "OUT" ? "CGST Input" : "CGST Output",
+        gstAccountType
+      );
+      await prisma.transaction.create({
+        data: {
+          amount: cgstAmount,
+          type: type === "OUT" ? "OUT" : "IN",
+          description: `CGST @ 2.5% on ${description || "transaction"}`,
+          category: "GST",
+          ledgerType,
+          paymentMode: "CASH",
+          date: transactionDate,
+          accountId: cgstAccount.id,
+          partyId: partyId || null,
+          userId,
+        },
+      });
+      // Update GST account balance
+      await prisma.account.update({
+        where: { id: cgstAccount.id },
+        data: { currentBalance: { increment: cgstAmount } },
+      });
+
+      // Post SGST
+      const sgstAccount = await findOrCreateGstAccount(
+        type === "OUT" ? "SGST Input" : "SGST Output",
+        gstAccountType
+      );
+      await prisma.transaction.create({
+        data: {
+          amount: sgstAmount,
+          type: type === "OUT" ? "OUT" : "IN",
+          description: `SGST @ 2.5% on ${description || "transaction"}`,
+          category: "GST",
+          ledgerType,
+          paymentMode: "CASH",
+          date: transactionDate,
+          accountId: sgstAccount.id,
+          partyId: partyId || null,
+          userId,
+        },
+      });
+      await prisma.account.update({
+        where: { id: sgstAccount.id },
+        data: { currentBalance: { increment: sgstAmount } },
+      });
+    } else if (isInterState && igstAmount > 0) {
+      // Post IGST
+      const igstAccount = await findOrCreateGstAccount(
+        type === "OUT" ? "IGST Input" : "IGST Output",
+        gstAccountType
+      );
+      await prisma.transaction.create({
+        data: {
+          amount: igstAmount,
+          type: type === "OUT" ? "OUT" : "IN",
+          description: `IGST @ 5% on ${description || "transaction"}`,
+          category: "GST",
+          ledgerType,
+          paymentMode: "CASH",
+          date: transactionDate,
+          accountId: igstAccount.id,
+          partyId: partyId || null,
+          userId,
+        },
+      });
+      await prisma.account.update({
+        where: { id: igstAccount.id },
+        data: { currentBalance: { increment: igstAmount } },
+      });
+    }
+  }
+
   // Update account balance(s)
+  // IMPORTANT: When paymentMode is CREDIT (Udhar), no actual money moves,
+  // so account balance should NOT change. Only CASH transactions affect account balance.
+  const isCashTransaction = paymentMode !== "CREDIT";
+
   if (type === "TRANSFER" && toAccountId) {
     // For transfers: decrease source account, increase destination account
+    // Transfers are always immediate (no credit mode for transfers)
     await prisma.account.update({
       where: { id: accountId },
       data: {
@@ -208,8 +339,9 @@ export async function createTransaction(input: CreateTransactionInput) {
         },
       },
     });
-  } else {
-    // For credit/debit: update single account
+  } else if (isCashTransaction) {
+    // For CASH transactions: update account balance
+    // CREDIT (Udhar) transactions don't affect account balance - no money moved
     const balanceChange = type === "IN" ? finalAmount : -finalAmount;
     await prisma.account.update({
       where: { id: accountId },
@@ -220,6 +352,8 @@ export async function createTransaction(input: CreateTransactionInput) {
       },
     });
   }
+  // For CREDIT payment mode: account balance is NOT updated
+  // The party balance will be calculated from CREDIT transactions
 
   // NOTE: Party totalDue is now calculated dynamically from transactions
   // No need to update it here - it will be calculated when needed
@@ -258,6 +392,7 @@ export async function getPartiesForSelect() {
       id: true,
       name: true,
       type: true,
+      state: true,
     },
   });
   return parties;
@@ -468,7 +603,7 @@ export async function updateTransaction(input: UpdateTransactionInput) {
   const isTraderPurchase = partyType && partyType !== "CUSTOMER" && includeTax;
 
   if (isTraderPurchase && stockId) {
-    taxAmount = Math.round(amount * TRADER_TAX_RATE * 100) / 100;
+    taxAmount = Math.round(amount * GST_RATE * 100) / 100;
     finalAmount = amount + taxAmount;
   }
 

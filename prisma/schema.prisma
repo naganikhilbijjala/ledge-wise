@@ -10,12 +10,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Account types: Cash, Bank, Loan (informal/formal)
+// Account types: Cash, Bank, Loan, GST
 enum AccountType {
   CASH
   BANK
   LOAN_GIVEN     // Money lent out (receivable)
   LOAN_TAKEN     // Money borrowed (payable)
+  GST_PAYABLE    // GST liability (CGST, SGST, IGST we need to pay)
+  GST_RECEIVABLE // GST input credit (GST we can claim)
 }
 
 // Transaction direction
@@ -122,6 +124,8 @@ model Party {
   type         PartyType
   phone        String?
   address      String?
+  state        String?   // Indian state for GST calculation (e.g., "Telangana", "Maharashtra")
+  gstNumber    String?   // GST registration number (if registered)
   totalDue     Decimal   @default(0) @db.Decimal(15, 2) // Positive = they owe us, Negative = we owe them
   notes        String?
   isActive     Boolean   @default(true)

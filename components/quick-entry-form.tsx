@@ -23,7 +23,15 @@ interface Party {
   id: string;
   name: string;
   type: string;
+  state?: string | null;
 }
+
+// GST Constants
+const BUSINESS_STATE = "Telangana"; // Our business is in Telangana
+const GST_RATE = 0.05; // 5% total GST
+const CGST_RATE = 0.025; // 2.5% CGST
+const SGST_RATE = 0.025; // 2.5% SGST
+const IGST_RATE = 0.05; // 5% IGST
 
 interface Category {
   id: string;
@@ -129,9 +137,14 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
     date: formatDateTimeForInput(editTransaction?.date),
   });
 
-  // Get selected party type
+  // Get selected party info for GST calculation
   const selectedParty = parties.find(p => p.id === formData.partyId);
   const isTraderPurchase = selectedParty && selectedParty.type !== "CUSTOMER";
+
+  // GST calculation based on party's state
+  const partyState = selectedParty?.state;
+  const isSameState = partyState === BUSINESS_STATE;
+  const isInterState = partyState && partyState !== BUSINESS_STATE;
 
   // Calculate amount from stock data
   const calculateStockAmount = () => {
@@ -140,14 +153,28 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
     return qty * price;
   };
 
-  // Calculate tax amount (5% for trader purchases)
-  const calculateTaxAmount = () => {
-    if (!isTraderPurchase || !stockData.includeTax) return 0;
-    return calculateStockAmount() * 0.05;
+  // Calculate GST amounts based on party's state
+  const calculateGST = () => {
+    if (!stockData.includeTax || !partyState) {
+      return { cgst: 0, sgst: 0, igst: 0, total: 0 };
+    }
+    const baseAmount = calculateStockAmount();
+    if (isSameState) {
+      // Intra-state: CGST + SGST
+      const cgst = Math.round(baseAmount * CGST_RATE * 100) / 100;
+      const sgst = Math.round(baseAmount * SGST_RATE * 100) / 100;
+      return { cgst, sgst, igst: 0, total: cgst + sgst };
+    } else {
+      // Inter-state: IGST
+      const igst = Math.round(baseAmount * IGST_RATE * 100) / 100;
+      return { cgst: 0, sgst: 0, igst, total: igst };
+    }
   };
 
-  // Total amount including tax
-  const totalAmount = calculateStockAmount() + calculateTaxAmount();
+  const gstAmounts = calculateGST();
+
+  // Total amount including GST
+  const totalAmount = calculateStockAmount() + gstAmounts.total;
 
   // Auto-update amount and description when stock data changes
   const handleStockDataChange = (updates: Partial<typeof stockData>) => {
@@ -181,8 +208,13 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
       return;
     }
 
-    // For transfers, require a destination account
+    // For Contra (transfers), require a destination account
     if (formData.type === "TRANSFER" && !formData.toAccountId) {
+      return;
+    }
+
+    // For Sales/Purchase (CREDIT), require a party
+    if (formData.paymentMode === "CREDIT" && formData.type !== "TRANSFER" && !formData.partyId) {
       return;
     }
 
@@ -198,7 +230,7 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             description: formData.description || undefined,
             category: formData.category || undefined,
             ledgerType: formData.ledgerType,
-            paymentMode: formData.partyId ? formData.paymentMode : "CASH",
+            paymentMode: formData.paymentMode,
             date: new Date(formData.date),
             // Stock purchase fields for edit
             stockId: hasStockMovement && stockData.stockId ? stockData.stockId : undefined,
@@ -222,7 +254,7 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             description: formData.description || undefined,
             category: formData.category || undefined,
             ledgerType: formData.ledgerType,
-            paymentMode: formData.partyId ? formData.paymentMode : "CASH",
+            paymentMode: formData.paymentMode,
             date: new Date(formData.date),
             // Stock purchase fields
             stockId: isStockPurchase && stockData.stockId ? stockData.stockId : undefined,
@@ -303,47 +335,89 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
     <Card>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Transaction Type Toggle */}
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => setFormData((p) => ({ ...p, type: "OUT", toAccountId: "" }))}
-              className={cn(
-                "flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors",
-                formData.type === "OUT"
-                  ? "bg-red-500 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              )}
-            >
-              <ArrowUpRight size={20} />
-              Debit
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormData((p) => ({ ...p, type: "IN", toAccountId: "" }))}
-              className={cn(
-                "flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors",
-                formData.type === "IN"
-                  ? "bg-green-500 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              )}
-            >
-              <ArrowDownLeft size={20} />
-              Credit
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormData((p) => ({ ...p, type: "TRANSFER", partyId: "" }))}
-              className={cn(
-                "flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors",
-                formData.type === "TRANSFER"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              )}
-            >
-              <ArrowLeftRight size={20} />
-              Transfer
-            </button>
+          {/* Voucher Type Toggle - Tally Style */}
+          <div className="space-y-2">
+            <Label>Voucher Type</Label>
+            <div className="grid grid-cols-5 gap-1">
+              {/* Receipt - Cash IN */}
+              <button
+                type="button"
+                onClick={() => setFormData((p) => ({ ...p, type: "IN", paymentMode: "CASH", toAccountId: "" }))}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-medium transition-colors",
+                  formData.type === "IN" && formData.paymentMode === "CASH"
+                    ? "bg-green-500 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                )}
+              >
+                <ArrowDownLeft size={18} />
+                Receipt
+              </button>
+              {/* Payment - Cash OUT */}
+              <button
+                type="button"
+                onClick={() => setFormData((p) => ({ ...p, type: "OUT", paymentMode: "CASH", toAccountId: "" }))}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-medium transition-colors",
+                  formData.type === "OUT" && formData.paymentMode === "CASH"
+                    ? "bg-red-500 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                )}
+              >
+                <ArrowUpRight size={18} />
+                Payment
+              </button>
+              {/* Sales - Credit IN (Udhar) */}
+              <button
+                type="button"
+                onClick={() => setFormData((p) => ({ ...p, type: "IN", paymentMode: "CREDIT", toAccountId: "" }))}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-medium transition-colors",
+                  formData.type === "IN" && formData.paymentMode === "CREDIT"
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                )}
+              >
+                <ArrowDownLeft size={18} />
+                Sales
+              </button>
+              {/* Purchase - Credit OUT (Udhar) */}
+              <button
+                type="button"
+                onClick={() => setFormData((p) => ({ ...p, type: "OUT", paymentMode: "CREDIT", toAccountId: "" }))}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-medium transition-colors",
+                  formData.type === "OUT" && formData.paymentMode === "CREDIT"
+                    ? "bg-red-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                )}
+              >
+                <ArrowUpRight size={18} />
+                Purchase
+              </button>
+              {/* Contra - Transfer between accounts */}
+              <button
+                type="button"
+                onClick={() => setFormData((p) => ({ ...p, type: "TRANSFER", paymentMode: "CASH", partyId: "" }))}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-medium transition-colors",
+                  formData.type === "TRANSFER"
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                )}
+              >
+                <ArrowLeftRight size={18} />
+                Contra
+              </button>
+            </div>
+            {/* Voucher type description */}
+            <p className="text-xs text-gray-500">
+              {formData.type === "IN" && formData.paymentMode === "CASH" && "Receipt: Cash/Bank received"}
+              {formData.type === "OUT" && formData.paymentMode === "CASH" && "Payment: Cash/Bank paid out"}
+              {formData.type === "IN" && formData.paymentMode === "CREDIT" && "Sales: Sold on credit (Udhar)"}
+              {formData.type === "OUT" && formData.paymentMode === "CREDIT" && "Purchase: Bought on credit (Udhar)"}
+              {formData.type === "TRANSFER" && "Contra: Bank ↔ Cash transfer"}
+            </p>
           </div>
 
           {/* Account Selection */}
@@ -485,8 +559,8 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
                     />
                   </div>
 
-                  {/* Tax checkbox - only show for purchases from non-farmer (trader) */}
-                  {formData.type === "OUT" && isTraderPurchase && (
+                  {/* GST checkbox - show when party has state selected */}
+                  {partyState && (
                     <div className="flex items-center gap-2 pt-2 border-t border-amber-200">
                       <input
                         type="checkbox"
@@ -496,29 +570,47 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
                         className="h-4 w-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
                       />
                       <Label htmlFor="includeTax" className="text-sm cursor-pointer">
-                        Include 5% tax (buying from trader)
+                        Include GST (5%) - {isSameState ? "CGST 2.5% + SGST 2.5%" : "IGST 5%"}
                       </Label>
                     </div>
                   )}
+                  {!partyState && formData.partyId && (
+                    <p className="text-xs text-orange-600 pt-2 border-t border-amber-200">
+                      Set party&apos;s state in Party settings to enable GST calculation
+                    </p>
+                  )}
 
-                  {/* Amount Summary */}
+                  {/* Amount Summary with GST breakdown */}
                   {calculateStockAmount() > 0 && (
                     <div className={`pt-2 border-t space-y-1 ${formData.type === "OUT" ? "border-amber-200" : "border-green-200"}`}>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Base Amount:</span>
                         <span className="font-medium">{formatINR(calculateStockAmount())}</span>
                       </div>
-                      {stockData.includeTax && calculateTaxAmount() > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Tax (5%):</span>
-                          <span className="font-medium text-amber-600">{formatINR(calculateTaxAmount())}</span>
-                        </div>
-                      )}
-                      {stockData.includeTax && calculateTaxAmount() > 0 && (
-                        <div className="flex justify-between text-sm font-bold">
-                          <span>Total:</span>
-                          <span className={formData.type === "OUT" ? "text-red-600" : "text-green-600"}>{formatINR(totalAmount)}</span>
-                        </div>
+                      {stockData.includeTax && gstAmounts.total > 0 && (
+                        <>
+                          {isSameState ? (
+                            <>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">CGST (2.5%):</span>
+                                <span className="font-medium text-amber-600">{formatINR(gstAmounts.cgst)}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">SGST (2.5%):</span>
+                                <span className="font-medium text-amber-600">{formatINR(gstAmounts.sgst)}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">IGST (5%):</span>
+                              <span className="font-medium text-amber-600">{formatINR(gstAmounts.igst)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-sm font-bold">
+                            <span>Total:</span>
+                            <span className={formData.type === "OUT" ? "text-red-600" : "text-green-600"}>{formatINR(totalAmount)}</span>
+                          </div>
+                        </>
                       )}
                     </div>
                   )}
@@ -615,40 +707,58 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
                         />
                       </div>
 
-                      {/* Tax checkbox - only show for purchases from non-farmer (trader) */}
-                      {formData.type === "OUT" && isTraderPurchase && (
+                      {/* GST checkbox - show when party has state selected */}
+                      {partyState && (
                         <div className="flex items-center gap-2 pt-2 border-t border-amber-200">
                           <input
                             type="checkbox"
-                            id="includeTax"
+                            id="includeTaxCreate"
                             checked={stockData.includeTax}
                             onChange={(e) => handleStockDataChange({ includeTax: e.target.checked })}
                             className="h-4 w-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
                           />
-                          <Label htmlFor="includeTax" className="text-sm cursor-pointer">
-                            Include 5% tax (buying from trader)
+                          <Label htmlFor="includeTaxCreate" className="text-sm cursor-pointer">
+                            Include GST (5%) - {isSameState ? "CGST 2.5% + SGST 2.5%" : "IGST 5%"}
                           </Label>
                         </div>
                       )}
+                      {!partyState && formData.partyId && (
+                        <p className="text-xs text-orange-600 pt-2 border-t border-amber-200">
+                          Set party&apos;s state in Party settings to enable GST calculation
+                        </p>
+                      )}
 
-                      {/* Amount Summary */}
+                      {/* Amount Summary with GST breakdown */}
                       {calculateStockAmount() > 0 && (
                         <div className={`pt-2 border-t space-y-1 ${formData.type === "OUT" ? "border-amber-200" : "border-green-200"}`}>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-600">Base Amount:</span>
                             <span className="font-medium">{formatINR(calculateStockAmount())}</span>
                           </div>
-                          {stockData.includeTax && calculateTaxAmount() > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">Tax (5%):</span>
-                              <span className="font-medium text-amber-600">{formatINR(calculateTaxAmount())}</span>
-                            </div>
-                          )}
-                          {stockData.includeTax && calculateTaxAmount() > 0 && (
-                            <div className="flex justify-between text-sm font-bold">
-                              <span>Total:</span>
-                              <span className={formData.type === "OUT" ? "text-red-600" : "text-green-600"}>{formatINR(totalAmount)}</span>
-                            </div>
+                          {stockData.includeTax && gstAmounts.total > 0 && (
+                            <>
+                              {isSameState ? (
+                                <>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">CGST (2.5%):</span>
+                                    <span className="font-medium text-amber-600">{formatINR(gstAmounts.cgst)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">SGST (2.5%):</span>
+                                    <span className="font-medium text-amber-600">{formatINR(gstAmounts.sgst)}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-600">IGST (5%):</span>
+                                  <span className="font-medium text-amber-600">{formatINR(gstAmounts.igst)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between text-sm font-bold">
+                                <span>Total:</span>
+                                <span className={formData.type === "OUT" ? "text-red-600" : "text-green-600"}>{formatINR(totalAmount)}</span>
+                              </div>
+                            </>
                           )}
                         </div>
                       )}
@@ -659,11 +769,13 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             </div>
           )}
 
-          {/* Party Selection - Hide for Transfers */}
+          {/* Party Selection - Hide for Contra, Required for Sales/Purchase */}
           {formData.type !== "TRANSFER" && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="party">Party (Optional)</Label>
+              <Label htmlFor="party">
+                Party {formData.paymentMode === "CREDIT" ? "*" : "(Optional)"}
+              </Label>
               <button
                 type="button"
                 onClick={() => setShowAddParty(!showAddParty)}
@@ -755,45 +867,12 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
           </div>
           )}
 
-          {/* Payment Mode - Only show when party is selected */}
-          {formData.type !== "TRANSFER" && formData.partyId && (
-            <div className="space-y-2">
-              <Label>Payment Mode</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData((p) => ({ ...p, paymentMode: "CASH" }))
-                  }
-                  className={cn(
-                    "py-2 rounded-lg text-sm font-medium transition-colors",
-                    formData.paymentMode === "CASH"
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  )}
-                >
-                  Cash (Paid)
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData((p) => ({ ...p, paymentMode: "CREDIT" }))
-                  }
-                  className={cn(
-                    "py-2 rounded-lg text-sm font-medium transition-colors",
-                    formData.paymentMode === "CREDIT"
-                      ? "bg-orange-500 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  )}
-                >
-                  Credit (Udhar)
-                </button>
-              </div>
-              {formData.paymentMode === "CREDIT" && (
-                <p className="text-xs text-orange-600">
-                  This will affect party outstanding balance
-                </p>
-              )}
+          {/* Payment Mode info - shown for Sales/Purchase */}
+          {formData.paymentMode === "CREDIT" && formData.type !== "TRANSFER" && (
+            <div className="p-2 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-xs text-orange-700">
+                <strong>{formData.type === "IN" ? "Sales" : "Purchase"} on Credit (Udhar):</strong> This will affect party outstanding balance, not account balance.
+              </p>
             </div>
           )}
 
@@ -842,40 +921,6 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
             />
           </div>
 
-          {/* Ledger Type Toggle */}
-          <div className="space-y-2">
-            <Label>Ledger Type</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData((p) => ({ ...p, ledgerType: "PARALLEL" }))
-                }
-                className={cn(
-                  "py-2 rounded-lg text-sm font-medium transition-colors",
-                  formData.ledgerType === "PARALLEL"
-                    ? "bg-amber-500 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                )}
-              >
-                Parallel (Private)
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData((p) => ({ ...p, ledgerType: "OFFICIAL" }))
-                }
-                className={cn(
-                  "py-2 rounded-lg text-sm font-medium transition-colors",
-                  formData.ledgerType === "OFFICIAL"
-                    ? "bg-blue-500 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                )}
-              >
-                Official (Tally)
-              </button>
-            </div>
-          </div>
 
           {/* Action Buttons */}
           <div className="flex gap-2">
@@ -892,7 +937,13 @@ export function QuickEntryForm({ accounts, parties: initialParties, categories, 
               type="submit"
               className="flex-1 h-12 text-lg"
               variant={formData.type === "IN" ? "success" : formData.type === "TRANSFER" ? "warning" : "destructive"}
-              disabled={isPending || !formData.accountId || !formData.amount || (formData.type === "TRANSFER" && !formData.toAccountId)}
+              disabled={
+                isPending ||
+                !formData.accountId ||
+                !formData.amount ||
+                (formData.type === "TRANSFER" && !formData.toAccountId) ||
+                (formData.paymentMode === "CREDIT" && formData.type !== "TRANSFER" && !formData.partyId)
+              }
             >
               {isPending ? (
                 <>

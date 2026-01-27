@@ -72,36 +72,27 @@ async function PartyLedgerContent({ id }: { id: string }) {
   };
 
   // Calculate running balance for ledger view from transactions
-  // From the party's perspective (what they owe us):
-  // - IN (Credit to our account) = We received money from party → They gave us goods/services on credit
-  //   This means they owe us less (we received payment) → decrease balance (negative)
-  // - OUT (Debit from our account) = We paid money to party → We bought goods/services on credit
-  //   This means they owe us more (we gave them payment for future goods) → increase balance (positive)
+  // From our perspective tracking what's owed:
   //
-  // But for stock purchases where payment is made at time of purchase:
-  // - OUT means we PAID them → transaction is settled, no outstanding balance
-  // - IN means we RECEIVED from them → transaction is settled, no outstanding balance
+  // For CREDIT (Udhar) transactions only:
+  // - IN (Credit) = We sold goods/services on credit → they owe us more → +amount
+  // - OUT (Debit) = We bought goods/services on credit → we owe them more → -amount
   //
-  // The correct interpretation for a khata/ledger:
-  // Only CREDIT transactions affect the party balance (khata)
-  // CASH transactions are settled immediately and don't create outstanding balance
+  // For CASH transactions:
+  // - No balance change - money already exchanged, transaction is settled
   //
-  // For CREDIT transactions:
-  // - OUT (we paid them) = reduces what we owe them → positive balance change
-  // - IN (we received from them) = increases what we owe them → negative balance change
-  //
-  // Positive balance = They owe us (Dr)
-  // Negative balance = We owe them (Cr)
+  // Positive balance = They owe us (Dr) - Debtors/Receivables
+  // Negative balance = We owe them (Cr) - Creditors/Payables
   let runningBalance = 0;
   const transactionsWithBalance = [...party.transactions]
     .reverse()
     .map((tx) => {
       const amount = toNumber(tx.amount);
-      // Only CREDIT transactions affect the running balance
-      // CASH transactions show in history but don't change balance
+      // Only CREDIT (Udhar) transactions affect the running balance
+      // CASH transactions show in history but don't change party balance
       const isCredit = tx.paymentMode === "CREDIT";
       const balanceChange = isCredit
-        ? (tx.type === "OUT" ? amount : -amount)
+        ? (tx.type === "IN" ? amount : -amount)
         : 0;
       runningBalance += balanceChange;
       return { ...tx, runningBalance, isCredit };
@@ -192,10 +183,10 @@ async function PartyLedgerContent({ id }: { id: string }) {
                       Description
                     </th>
                     <th className="text-right py-3 px-2 font-medium text-gray-500">
-                      Credit
+                      Debit
                     </th>
                     <th className="text-right py-3 px-2 font-medium text-gray-500">
-                      Debit
+                      Credit
                     </th>
                     <th className="text-right py-3 px-2 font-medium text-gray-500">
                       Balance
@@ -227,7 +218,7 @@ async function PartyLedgerContent({ id }: { id: string }) {
                                   ? "bg-orange-100 text-orange-700"
                                   : "bg-green-100 text-green-700"
                               }`}>
-                                {tx.isCredit ? "Credit" : "Cash"}
+                                {tx.isCredit ? "Udhar" : "Cash"}
                               </span>
                             </div>
                             <p className="text-xs text-gray-500">
@@ -236,7 +227,8 @@ async function PartyLedgerContent({ id }: { id: string }) {
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right">
-                          {tx.type === "OUT" ? (
+                          {/* Debit column = IN (sales/receipts) - they owe us more */}
+                          {tx.type === "IN" ? (
                             <span className="text-green-600 font-medium">
                               {formatINR(amount)}
                             </span>
@@ -245,7 +237,8 @@ async function PartyLedgerContent({ id }: { id: string }) {
                           )}
                         </td>
                         <td className="py-3 px-2 text-right">
-                          {tx.type === "IN" ? (
+                          {/* Credit column = OUT (purchases/payments) - we paid them */}
+                          {tx.type === "OUT" ? (
                             <span className="text-red-600 font-medium">
                               {formatINR(amount)}
                             </span>

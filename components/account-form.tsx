@@ -131,6 +131,12 @@ export function AccountForm({ editAccount }: Props) {
               <option value="LOAN_TAKEN">
                 Creditors - People you owe money to
               </option>
+              <option value="GST_PAYABLE">
+                GST Payable - GST liability (CGST/SGST/IGST to pay)
+              </option>
+              <option value="GST_RECEIVABLE">
+                GST Receivable - Input tax credit (GST to claim)
+              </option>
             </Select>
           </div>
 
