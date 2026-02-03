@@ -10,6 +10,7 @@ import { AppLayout } from "@/components/app-layout";
 import {
   formatINR,
   formatDate,
+  formatTime,
   toNumber,
   getAccountTypeColor,
 } from "@/lib/utils";
@@ -102,32 +103,32 @@ async function AccountDetailContent({ id }: { id: string }) {
     LOAN_TAKEN: <ArrowDownRight className="h-6 w-6 text-red-600" />,
   };
 
-  // Calculate running balance (from oldest to newest, then reverse)
-  let runningBalance = 0;
-  const transactionsWithBalance = [...allTransactions]
-    .reverse()
-    .map((tx) => {
-      const amount = toNumber(tx.amount);
-      let balanceChange = 0;
+  // Calculate running balance working backwards from current balance
+  // Transactions are sorted newest-first, so we start with current balance
+  // and subtract each transaction's effect as we go back in time
+  let runningBalance = balance;
+  const transactionsWithBalance = allTransactions.map((tx) => {
+    const amount = toNumber(tx.amount);
+    let balanceChange = 0;
 
-      if (tx.isFromAccount) {
-        // This account is the source
-        if (tx.type === "IN") {
-          balanceChange = amount; // Credit to this account
-        } else if (tx.type === "OUT") {
-          balanceChange = -amount; // Debit from this account
-        } else if (tx.type === "TRANSFER") {
-          balanceChange = -amount; // Transfer out from this account
-        }
-      } else {
-        // This account is the destination (only for transfers)
-        balanceChange = amount; // Transfer in to this account
+    if (tx.isFromAccount) {
+      // This account is the source
+      if (tx.type === "IN") {
+        balanceChange = amount; // Money in to this account
+      } else if (tx.type === "OUT") {
+        balanceChange = -amount; // Money out from this account
+      } else if (tx.type === "TRANSFER") {
+        balanceChange = -amount; // Transfer out from this account
       }
+    } else {
+      // This account is the destination (only for transfers)
+      balanceChange = amount; // Transfer in to this account
+    }
 
-      runningBalance += balanceChange;
-      return { ...tx, runningBalance, balanceChange };
-    })
-    .reverse();
+    const currentRunning = runningBalance;
+    runningBalance -= balanceChange; // Go back in time
+    return { ...tx, runningBalance: currentRunning, balanceChange };
+  });
 
   return (
     <div className="space-y-6">
@@ -206,8 +207,8 @@ async function AccountDetailContent({ id }: { id: string }) {
                 <tbody>
                   {transactionsWithBalance.map((tx) => {
                     const amount = toNumber(tx.amount);
-                    const isCredit = tx.balanceChange > 0;
-                    const isDebit = tx.balanceChange < 0;
+                    const isDebit = tx.balanceChange < 0; // Money going out
+                    const isCredit = tx.balanceChange > 0; // Money coming in
 
                     return (
                       <tr
@@ -215,7 +216,8 @@ async function AccountDetailContent({ id }: { id: string }) {
                         className="border-b border-gray-100 hover:bg-gray-50"
                       >
                         <td className="py-3 px-2 text-gray-600">
-                          {formatDate(tx.date)}
+                          <div>{formatDate(tx.date)}</div>
+                          <div className="text-xs text-gray-400">{formatTime(tx.date)}</div>
                         </td>
                         <td className="py-3 px-2">
                           <div className="flex items-center gap-2">
@@ -255,9 +257,9 @@ async function AccountDetailContent({ id }: { id: string }) {
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right">
-                          {/* Debit column = balance increase (money in) */}
-                          {isCredit ? (
-                            <span className="text-green-600 font-medium">
+                          {/* Debit column = money going out */}
+                          {isDebit ? (
+                            <span className="text-red-600 font-medium">
                               {formatINR(Math.abs(tx.balanceChange))}
                             </span>
                           ) : (
@@ -265,9 +267,9 @@ async function AccountDetailContent({ id }: { id: string }) {
                           )}
                         </td>
                         <td className="py-3 px-2 text-right">
-                          {/* Credit column = balance decrease (money out) */}
-                          {isDebit ? (
-                            <span className="text-red-600 font-medium">
+                          {/* Credit column = money coming in */}
+                          {isCredit ? (
+                            <span className="text-green-600 font-medium">
                               {formatINR(Math.abs(tx.balanceChange))}
                             </span>
                           ) : (

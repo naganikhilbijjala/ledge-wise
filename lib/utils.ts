@@ -29,6 +29,14 @@ export function formatDate(date: Date): string {
   }).format(new Date(date));
 }
 
+export function formatTime(date: Date): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(date));
+}
+
 // Format date for input fields
 export function formatDateForInput(date: Date): string {
   return new Date(date).toISOString().split("T")[0];
